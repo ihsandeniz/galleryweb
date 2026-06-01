@@ -1,0 +1,11 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+.env
+.env.local
+cache/
+*.log
+.DS_Store
+node_modules/

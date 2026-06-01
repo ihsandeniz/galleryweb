@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Gallery Pro</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=19">
+    <!-- Leaflet (Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#070a0e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GalleryPro">
+</head>
+<body>
+    <!-- Topbar (Slim Header) -->
+    <header class="topbar">
+        <button id="sidebarToggleBtn" class="topbar-btn" title="Menü">☰</button>
+
+        <div class="topbar-logo">
+            Gallery<span class="logo-accent">Pro</span>
+        </div>
+
+        <div class="topbar-search">
+            <input type="text" id="searchInput" placeholder="Ara... (Ctrl+F)" class="search-input">
+        </div>
+
+        <div id="dirChipsRow" class="dir-chips-row"></div>
+
+        <div class="topbar-right">
+            <button id="refreshBtn" class="topbar-btn" title="Yenile (R)">↻</button>
+            <button id="pwaInstallBtn" class="topbar-btn hidden" title="Uygulamayı Yükle">⬇</button>
+            <button id="themeToggleBtn" class="topbar-btn" title="Tema">◐</button>
+            <button id="helpBtn" class="topbar-btn" title="Kısayollar (?)">?</button>
+        </div>
+    </header>
+
+    <!-- Sidebar Backdrop (mobile) -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
+    <!-- App Layout Container -->
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <!-- KLASÖRLER BÖLÜMÜ -->
+            <div class="sidebar-label">KLASÖRLER</div>
+
+            <button id="selectDirBtn" class="sidebar-item sidebar-primary">
+                <span class="si-icon">📂</span>
+                <span class="si-label">Klasör Seç</span>
+            </button>
+
+            <button id="addDirBtn" class="sidebar-item" title="Klasör ekle">
+                <span class="si-icon">＋</span>
+                <span class="si-label">Klasör Ekle</span>
+            </button>
+
+            <button id="clearDirBtn" class="sidebar-item" title="Tüm klasörleri kaldır">
+                <span class="si-icon">✕</span>
+                <span class="si-label">Temizle</span>
+            </button>
+
+            <div class="bookmark-wrapper" style="position:relative">
+                <button id="bookmarkAddBtn" class="sidebar-item" title="Yer imi ekle">
+                    <span class="si-icon">🔖</span>
+                    <span class="si-label">Yer İmleri</span>
+                </button>
+                <div id="bookmarkDropdown" class="bookmark-dropdown hidden"></div>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- GÖRÜNÜM BÖLÜMÜ -->
+            <div class="sidebar-label">GÖRÜNÜM</div>
+
+            <div class="sidebar-select-row">
+                <label>Mod</label>
+                <select id="viewModeSelect" class="sort-select">
+                    <option value="minimal">Minimal</option>
+                    <option value="compact">Compact</option>
+                    <option value="extended">Extended</option>
+                    <option value="thumbnail" selected>Thumbnail</option>
+                    <option value="large">Large</option>
+                    <option value="timeline">Timeline</option>
+                </select>
+            </div>
+
+            <div class="sidebar-select-row">
+                <label>Sırala</label>
+                <select id="sortSelect" class="sort-select">
+                    <option value="name">İsim</option>
+                    <option value="mtime">Tarih</option>
+                    <option value="size">Boyut</option>
+                    <option value="type">Tip</option>
+                    <option value="rating">Puan</option>
+                </select>
+            </div>
+
+            <button id="sortDirBtn" class="sidebar-item" title="Sıra yönü">
+                <span class="si-icon">↑</span>
+                <span class="si-label">Sıra Yönü</span>
+            </button>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- FİLTRE BÖLÜMÜ -->
+            <div class="sidebar-label">FİLTRE</div>
+
+            <button id="favsFilterBtn" class="sidebar-item" title="Sadece Favoriler (F)">
+                <span class="si-icon">♥</span>
+                <span class="si-label">Favoriler</span>
+            </button>
+
+            <button id="tagBarToggle" class="sidebar-item" title="Etiket Filtresi">
+                <span class="si-icon">#</span>
+                <span class="si-label">Etiketler</span>
+            </button>
+
+            <button id="fileTypeToggle" class="sidebar-item" title="Dosya Türü Filtresi">
+                <span class="si-icon">⊞</span>
+                <span class="si-label">Dosya Türü</span>
+            </button>
+
+            <button id="selectModeBtn" class="sidebar-item" title="Çoklu Seçim">
+                <span class="si-icon">☑</span>
+                <span class="si-label">Çoklu Seç</span>
+            </button>
+
+            <label class="sidebar-item checkbox-label" style="cursor:pointer">
+                <span class="si-icon">⊂</span>
+                <span class="si-label">
+                    <input type="checkbox" id="subFoldersCheck" style="margin-right:4px">Alt Klasörler
+                </span>
+            </label>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- ARAÇLAR BÖLÜMÜ -->
+            <div class="sidebar-label">ARAÇLAR</div>
+
+            <button id="albumsBtn" class="sidebar-item" title="Albümler">
+                <span class="si-icon">🗂</span>
+                <span class="si-label">Albümler</span>
+            </button>
+
+            <button id="statsBtn" class="sidebar-item" title="İstatistikler">
+                <span class="si-icon">📊</span>
+                <span class="si-label">İstatistik</span>
+            </button>
+
+            <button id="duplicatesBtn" class="sidebar-item" title="Benzer Resimleri Bul">
+                <span class="si-icon">⊙</span>
+                <span class="si-label">Benzerler</span>
+            </button>
+
+            <button id="trashBtn" class="sidebar-item" title="Çöp Kutusu">
+                <span class="si-icon">🗑</span>
+                <span class="si-label">Çöp Kutusu <span id="trashCount" class="si-badge hidden">0</span></span>
+            </button>
+
+            <button id="mapBtn" class="sidebar-item" title="Harita Görünümü">
+                <span class="si-icon">🗺</span>
+                <span class="si-label">Harita</span>
+            </button>
+
+            <button id="qrBtn" class="sidebar-item" title="QR Kod ile Paylaş">
+                <span class="si-icon">⊡</span>
+                <span class="si-label">QR Paylaş</span>
+            </button>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- SLIDESHOW BÖLÜMÜ -->
+            <div class="sidebar-label">SLIDESHOW</div>
+
+            <div class="slideshow-wrapper" style="width:100%">
+                <button id="slideshowBtn" class="sidebar-item" title="Slideshow (S)">
+                    <span class="si-icon">▶</span>
+                    <span class="si-label">Başlat</span>
+                </button>
+                <button id="slideshowIntervalBtn" class="sidebar-item" title="Slideshow hızı">
+                    <span class="si-icon">⚙</span>
+                    <span class="si-label">Hız Ayarı</span>
+                </button>
+                <div id="slideshowIntervalPopover" class="interval-popover hidden">
+                    <span class="interval-label">Süre:</span>
+                    <button class="interval-opt" data-ms="1000">1s</button>
+                    <button class="interval-opt" data-ms="2000">2s</button>
+                    <button class="interval-opt" data-ms="3000">3s</button>
+                    <button class="interval-opt" data-ms="5000">5s</button>
+                    <button class="interval-opt" data-ms="10000">10s</button>
+                </div>
+            </div>
+
+            <button id="kioskBtn" class="sidebar-item" title="Kiosk Modu (K)">
+                <span class="si-icon">⛶</span>
+                <span class="si-label">Kiosk</span>
+            </button>
+
+            <!-- Ağaç toggle (sidebar bottom) -->
+            <div class="sidebar-divider"></div>
+            <button id="treeToggleBtn" class="sidebar-item" title="Klasör Ağacı (T)">
+                <span class="si-icon">🌿</span>
+                <span class="si-label">Ağaç Görünüm</span>
+            </button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Tree Panel -->
+            <div id="treePanel" class="tree-panel">
+                <div class="tree-panel-header">
+                    <span>KLASÖRLER</span>
+                    <button id="treePanelClose" class="btn-icon" title="Kapat">✕</button>
+                </div>
+                <div id="treeRoot" class="tree-root"></div>
+            </div>
+
+            <!-- Tag Filter Bar -->
+            <div id="tagBar" class="tag-bar hidden">
+                <div class="tag-bar-inner">
+                    <span class="tag-bar-label">ETİKET</span>
+                    <div id="tagChips" class="tag-chips">
+                        <span class="tag-empty-hint">Henüz etiket yok.</span>
+                    </div>
+                    <button id="clearTagsBtn" class="btn-icon tag-clear-btn hidden" title="Filteri temizle">✕</button>
+                </div>
+            </div>
+
+            <!-- File Type Filter Bar -->
+            <div id="fileTypeBar" class="ft-bar hidden">
+                <div class="ft-bar-inner">
+                    <div class="ft-group">
+                        <span class="ft-group-label">RESİM</span>
+                        <div class="ft-group-chips" id="fileTypeChips">
+                            <button class="ft-chip ft-chip--img" data-ext=".jpg,.jpeg"><span class="ft-dot"></span>JPG</button>
+                            <button class="ft-chip ft-chip--img" data-ext=".png"><span class="ft-dot"></span>PNG</button>
+                            <button class="ft-chip ft-chip--img" data-ext=".webp"><span class="ft-dot"></span>WebP</button>
+                            <button class="ft-chip ft-chip--img" data-ext=".gif"><span class="ft-dot"></span>GIF</button>
+                            <button class="ft-chip ft-chip--img" data-ext=".bmp"><span class="ft-dot"></span>BMP</button>
+                            <button class="ft-chip ft-chip--img" data-ext=".tiff"><span class="ft-dot"></span>TIFF</button>
+                            <button class="ft-chip ft-chip--img" data-ext=".heic,.heif"><span class="ft-dot"></span>HEIF</button>
+                            <button class="ft-chip ft-chip--img" data-ext=".avif"><span class="ft-dot"></span>AVIF</button>
+                        </div>
+                    </div>
+                    <div class="ft-divider"></div>
+                    <div class="ft-group">
+                        <span class="ft-group-label">VİDEO</span>
+                        <div class="ft-group-chips">
+                            <button class="ft-chip ft-chip--vid" data-ext=".mp4"><span class="ft-dot"></span>MP4</button>
+                            <button class="ft-chip ft-chip--vid" data-ext=".webm"><span class="ft-dot"></span>WebM</button>
+                            <button class="ft-chip ft-chip--vid" data-ext=".mov"><span class="ft-dot"></span>MOV</button>
+                        </div>
+                    </div>
+                    <button id="clearFileTypesBtn" class="ft-clear-btn hidden">✕</button>
+                </div>
+            </div>
+
+            <!-- Gallery Grid -->
+            <main class="gallery-container">
+                <div id="gallery" class="gallery-grid"></div>
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Yükleniyor...</p>
+                </div>
+                <div id="emptyState" class="empty-state hidden">
+                    <p>[ Klasör seçmek için sol menüyü kullanın ]</p>
+                </div>
+            </main>
+
+            <!-- Pagination -->
+            <footer class="pagination" id="pagination">
+                <div class="pagination-controls">
+                    <button id="firstPage" class="btn-page-icon" title="İlk sayfa">⏮</button>
+                    <button id="prevPage" class="btn-page-icon" title="Önceki (H)">‹</button>
+                    <div id="pageNumbers" class="page-numbers"></div>
+                    <button id="nextPage" class="btn-page-icon" title="Sonraki (L)">›</button>
+                    <button id="lastPage" class="btn-page-icon" title="Son sayfa">⏭</button>
+                </div>
+                <div class="pagination-meta">
+                    <span id="pageInfo" class="page-info-text"></span>
+                    <div class="pagination-jump">
+                        <input type="number" id="jumpInput" class="page-jump-input" min="1" placeholder="#">
+                        <button id="jumpBtn" class="btn-pagination-sm">Git</button>
+                    </div>
+                    <select id="perPageSelect" class="sort-select">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <button class="mbn-item" id="mbnFolderBtn" title="Klasör Seç">
+            <span class="mbn-icon">📂</span>
+            <span class="mbn-label">Klasör</span>
+        </button>
+        <button class="mbn-item" id="mbnFavsBtn" title="Favoriler">
+            <span class="mbn-icon">♥</span>
+            <span class="mbn-label">Favori</span>
+        </button>
+        <button class="mbn-item" id="mbnAlbumsBtn" title="Albümler">
+            <span class="mbn-icon">🗂</span>
+            <span class="mbn-label">Albüm</span>
+        </button>
+        <button class="mbn-item" id="mbnStatsBtn" title="İstatistikler">
+            <span class="mbn-icon">📊</span>
+            <span class="mbn-label">İstatistik</span>
+        </button>
+        <button class="mbn-item" id="mbnMenuBtn" title="Menü">
+            <span class="mbn-icon">⋯</span>
+            <span class="mbn-label">Menü</span>
+        </button>
+    </nav>
+
+    <!-- ===== MODALS & FIXED PANELS (outside app-layout) ===== -->
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box help-modal-box">
+            <div class="modal-header">
+                <span>⌨️ Klavye Kısayolları</span>
+                <button id="closeHelpBtn" class="btn-icon">✕</button>
+            </div>
+            <div class="help-content">
+                <div class="help-section">
+                    <h4>Galeri</h4>
+                    <div class="help-grid">
+                        <kbd>J</kbd><span>Aşağı kaydır</span>
+                        <kbd>K</kbd><span>Yukarı kaydır</span>
+                        <kbd>H</kbd><span>Önceki sayfa</span>
+                        <kbd>L</kbd><span>Sonraki sayfa</span>
+                        <kbd>gg</kbd><span>En üste git</span>
+                        <kbd>G</kbd><span>En alta git</span>
+                        <kbd>/</kbd><span>Ara</span>
+                        <kbd>R</kbd><span>Yenile</span>
+                        <kbd>S</kbd><span>Slideshow</span>
+                        <kbd>F</kbd><span>Favori filtresi</span>
+                        <kbd>?</kbd><span>Bu yardım</span>
+                    </div>
+                </div>
+                <div class="help-section">
+                    <h4>Lightbox</h4>
+                    <div class="help-grid">
+                        <kbd>H / ←</kbd><span>Önceki resim</span>
+                        <kbd>L / →</kbd><span>Sonraki resim</span>
+                        <kbd>J</kbd><span>10 resim ileri</span>
+                        <kbd>K</kbd><span>10 resim geri</span>
+                        <kbd>I</kbd><span>EXIF / Bilgi</span>
+                        <kbd>+/-</kbd><span>Zoom</span>
+                        <kbd>Del</kbd><span>Sil</span>
+                        <kbd>Q / Esc</kbd><span>Kapat</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Browser Modal -->
+    <div id="browserModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box">
+            <div class="modal-header">
+                <span id="browserPath" class="browser-path"></span>
+                <button id="closeBrowserBtn" class="btn-icon">✕</button>
+            </div>
+            <div id="browserHistory" class="browser-history hidden"></div>
+            <ul id="browserList" class="browser-list"></ul>
+            <div class="modal-footer">
+                <button id="selectCurrentBtn" class="btn-primary">Bu Klasörü Seç ✓</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trash Modal -->
+    <div id="trashModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>🗑️ Çöp Kutusu</span>
+                <button id="closeTrashBtn" class="btn-icon">✕</button>
+            </div>
+            <ul id="trashList" class="browser-list trash-list"></ul>
+            <div class="modal-footer trash-footer">
+                <span id="trashEmptyHint" class="trash-empty-hint">Çöp kutusu boş.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox -->
+    <div id="lightbox" class="lightbox hidden">
+        <button class="lightbox-close" id="closeLightbox">✕</button>
+        <button class="lightbox-delete" id="deleteLightboxBtn" title="Sil (Del)">🗑️</button>
+        <button class="lightbox-edit" id="editModeBtn" title="Düzenle (E)">✏️</button>
+        <button class="lightbox-autoplay" id="autoplayToggleBtn" title="Video Otomatik Oynat">▶ Auto</button>
+        <button class="lightbox-nav lightbox-prev" id="prevImage">‹</button>
+        <button class="lightbox-nav lightbox-next" id="nextImage">›</button>
+
+        <img id="lightboxImage" class="lightbox-image" src="" alt="">
+        <video id="lightboxVideo" class="lightbox-image hidden" controls></video>
+
+        <!-- EXIF Panel -->
+        <div id="exifPanel" class="exif-panel hidden">
+            <div class="exif-header">
+                <h3>Bilgi</h3>
+                <button id="closeExifBtn" class="btn-icon">✕</button>
+            </div>
+            <div id="exifContent" class="exif-content"></div>
+            <div class="rating-section">
+                <label class="note-label">Puan</label>
+                <div id="ratingPicker" class="rating-picker">
+                    <span class="star" data-star="1">★</span>
+                    <span class="star" data-star="2">★</span>
+                    <span class="star" data-star="3">★</span>
+                    <span class="star" data-star="4">★</span>
+                    <span class="star" data-star="5">★</span>
+                    <button id="clearRatingBtn" class="btn-icon rating-clear-btn" title="Puanı sil">✕</button>
+                </div>
+            </div>
+            <div class="note-section">
+                <label class="note-label">Not</label>
+                <textarea id="noteTextarea" class="note-textarea" placeholder="Bu resim için not ekle..."></textarea>
+                <button id="saveNoteBtn" class="btn-primary note-save-btn">Kaydet</button>
+            </div>
+        </div>
+
+        <div class="lightbox-info">
+            <span id="imageCounter"></span>
+            <span id="imageName"></span>
+        </div>
+
+        <!-- Edit Toolbar (Faz 5.1) -->
+        <div id="editToolbar" class="edit-toolbar hidden">
+            <button class="edit-btn" id="editRotateCCW"  title="90° Sola Döndür">↺ 90°</button>
+            <button class="edit-btn" id="editRotateCW"   title="90° Sağa Döndür">↻ 90°</button>
+            <button class="edit-btn" id="editRotate180"  title="180° Döndür">↕ 180°</button>
+            <button class="edit-btn" id="editCropBtn"    title="Kırp">✂ Kırp</button>
+            <button class="edit-btn" id="editAdjustBtn"  title="Parlaklık / Kontrast">☀ Ayarla</button>
+            <button class="edit-btn edit-btn--revert" id="editRevertBtn" title="Orijinale Dön">↩ Orijinal</button>
+            <button class="edit-btn edit-btn--close" id="closeEditToolbarBtn" title="Düzenlemeyi Kapat">✕</button>
+        </div>
+
+        <!-- Crop Overlay Canvas -->
+        <canvas id="cropCanvas" class="crop-canvas hidden"></canvas>
+
+        <!-- Adjust Panel -->
+        <div id="adjustPanel" class="adjust-panel hidden">
+            <label>Parlaklık <span id="brightnessVal">1.0</span>x</label>
+            <input type="range" id="brightnessSlider" min="0.2" max="3.0" step="0.05" value="1.0">
+            <label>Kontrast <span id="contrastVal">1.0</span>x</label>
+            <input type="range" id="contrastSlider" min="0.2" max="3.0" step="0.05" value="1.0">
+            <div class="adjust-actions">
+                <button id="adjustApplyBtn" class="btn btn-primary">Uygula</button>
+                <button id="adjustCancelBtn" class="btn-icon">İptal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Action Bar -->
+    <div id="batchBar" class="batch-bar hidden">
+        <span id="batchCount" class="batch-count">0 seçili</span>
+        <div class="batch-actions">
+            <button id="batchSelectAll" class="btn-icon">Tümünü Seç</button>
+            <button id="batchFavAdd" class="btn-icon" title="Favorilere ekle">♥ Favori</button>
+            <button id="batchFavRemove" class="btn-icon" title="Favorilerden çıkar">♡ Çıkar</button>
+            <button id="batchTagBtn" class="btn-icon" title="Etiket ekle"># Etiket</button>
+            <button id="batchAddToAlbumBtn" class="btn-icon" title="Albüme ekle">🗂️ Albüm</button>
+            <button id="batchCompareBtn" class="btn-icon" title="2 resmi karşılaştır (tam 2 seçili olmalı)" disabled>⇔ Karşılaştır</button>
+            <button id="batchCopyBtn" class="btn-icon" title="Kopyala">📋 Kopyala</button>
+            <button id="batchMoveBtn" class="btn-icon" title="Taşı">✂️ Taşı</button>
+            <button id="batchExifBtn" class="btn-icon" title="EXIF bilgisi yaz">🏷️ EXIF</button>
+            <button id="batchExportBtn" class="btn-icon" title="Zip olarak indir">📦 Zip</button>
+            <button id="batchDeleteBtn" class="btn-icon btn-danger" title="Sil">🗑️ Sil</button>
+        </div>
+        <button id="batchCancel" class="btn-icon" title="İptal">✕ İptal</button>
+    </div>
+
+    <!-- Batch Copy/Move Folder Picker Modal -->
+    <div id="folderPickerModal" class="modal hidden">
+        <div class="modal-backdrop" id="folderPickerBackdrop"></div>
+        <div class="modal-box" style="max-width:480px">
+            <div class="modal-header">
+                <h3 id="folderPickerTitle">Hedef Klasör Seç</h3>
+                <button id="closeFolderPickerBtn" class="btn-icon">✕</button>
+            </div>
+            <div class="folder-picker-body">
+                <div class="folder-picker-path">
+                    <span id="folderPickerCurrent" class="folder-picker-current-path"></span>
+                </div>
+                <div id="folderPickerList" class="folder-picker-list"></div>
+                <div class="folder-picker-footer">
+                    <span id="folderPickerSelectedPath" class="folder-picker-selected"></span>
+                    <button id="folderPickerConfirm" class="btn btn-primary">Seç</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Tag Input -->
+    <div id="batchTagModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box" style="max-width:360px">
+            <div class="modal-header">
+                <span># Toplu Etiket Ekle</span>
+                <button id="closeBatchTagBtn" class="btn-icon">✕</button>
+            </div>
+            <div style="padding:16px;display:flex;gap:8px">
+                <input type="text" id="batchTagInput" class="search-input" placeholder="Etiket adı..." maxlength="32" style="flex:1">
+                <button id="batchTagConfirm" class="btn-primary">Ekle</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch EXIF Modal (Faz 5.3) -->
+    <div id="batchExifModal" class="modal hidden">
+        <div class="modal-backdrop" id="batchExifBackdrop"></div>
+        <div class="modal-box" style="max-width:440px">
+            <div class="modal-header">
+                <h3>🏷️ Toplu EXIF Düzenle</h3>
+                <button id="closeBatchExifBtn" class="btn-icon">✕</button>
+            </div>
+            <div class="exif-edit-body">
+                <p class="exif-edit-hint">Boş bırakılan alanlar değiştirilmez.</p>
+                <label class="exif-edit-label">Sanatçı / Yazar</label>
+                <input type="text" id="exifArtist" class="search-input" placeholder="Ör: Ahmet Yıldız" maxlength="128">
+                <label class="exif-edit-label">Telif Hakkı</label>
+                <input type="text" id="exifCopyright" class="search-input" placeholder="Ör: © 2026 Ahmet Yıldız" maxlength="128">
+                <label class="exif-edit-label">Açıklama</label>
+                <input type="text" id="exifDescription" class="search-input" placeholder="Kısa açıklama..." maxlength="256">
+                <label class="exif-edit-label">Tarih (YYYY-MM-DD veya YYYY-MM-DDTHH:MM:SS)</label>
+                <input type="text" id="exifDatetime" class="search-input" placeholder="Ör: 2026-05-09">
+                <div class="exif-edit-footer">
+                    <span id="exifEditStatus" class="exif-edit-status"></span>
+                    <button id="batchExifConfirm" class="btn btn-primary">Uygula</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Modal -->
+    <div id="duplicateModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-box duplicate-modal-box">
+            <div class="modal-header">
+                <span>🔍 Benzer Resimler</span>
+                <button id="closeDuplicateBtn" class="btn-icon">✕</button>
+            </div>
+            <div id="duplicateContent" class="duplicate-content">
+                <div class="duplicate-scanning">
+                    <div class="spinner"></div>
+                    <p>Taranıyor...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span id="duplicateSummary" class="page-info-text"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Albums Panel -->
+    <aside id="albumsPanel" class="albums-panel">
+        <div class="albums-panel-header">
+            <h3>🗂️ Albümler</h3>
+            <button id="createAlbumBtn" class="btn-icon" title="Yeni Albüm">＋</button>
+            <button id="closeAlbumsBtn" class="btn-icon">✕</button>
+        </div>
+        <div id="albumsList" class="albums-list"></div>
+    </aside>
+    <div id="albumsBackdrop" class="albums-backdrop hidden"></div>
+
+    <!-- Create/Edit Album Modal -->
+    <div id="albumModal" class="modal hidden">
+        <div class="modal-backdrop" id="albumModalBackdrop"></div>
+        <div class="modal-box" style="max-width:400px">
+            <div class="modal-header">
+                <h3 id="albumModalTitle">Yeni Albüm</h3>
+                <button id="closeAlbumModalBtn" class="btn-icon">✕</button>
+            </div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+                <input type="text" id="albumNameInput" class="search-input" placeholder="Albüm adı..." maxlength="64">
+                <textarea id="albumDescInput" class="search-input" placeholder="Açıklama (opsiyonel)" rows="2" style="resize:vertical"></textarea>
+                <button id="albumModalConfirm" class="btn btn-primary">Oluştur</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Modal -->
+    <div id="qrModal" class="modal hidden">
+        <div class="modal-backdrop" id="qrBackdrop"></div>
+        <div class="modal-box qr-modal-box">
+            <div class="modal-header">
+                <h3>📲 QR Kod ile Paylaş</h3>
+                <button id="closeQrBtn" class="btn-icon">✕</button>
+            </div>
+            <div class="qr-modal-body">
+                <img id="qrImage" src="" alt="QR Kod" class="qr-image">
+                <p id="qrUrlText" class="qr-url-text"></p>
+                <button id="copyQrUrlBtn" class="btn btn-primary">🔗 URL Kopyala</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compare Modal -->
+    <div id="compareModal" class="modal hidden">
+        <div class="modal-backdrop" id="compareBackdrop"></div>
+        <div class="compare-modal-box">
+            <div class="compare-header">
+                <h3>⇔ Resim Karşılaştırma</h3>
+                <div class="compare-header-actions">
+                    <button id="compareSyncZoomBtn" class="btn-icon active" title="Senkron zoom">🔗 Senkron</button>
+                    <button id="closeCompareBtn" class="btn-icon">✕</button>
+                </div>
+            </div>
+            <div class="compare-split" id="compareSplit">
+                <div class="compare-pane" id="compareLeft">
+                    <img id="compareImgLeft" src="" alt="">
+                    <div class="compare-label" id="compareLabelLeft"></div>
+                </div>
+                <div class="compare-pane" id="compareRight">
+                    <img id="compareImgRight" src="" alt="">
+                    <div class="compare-label" id="compareLabelRight"></div>
+                </div>
+            </div>
+            <div class="compare-footer">
+                <span class="compare-hint">Scroll = zoom · Sürükle = kaydır</span>
+                <button id="compareResetBtn" class="btn-icon">↺ Sıfırla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Panel -->
+    <aside id="statsPanel" class="stats-panel">
+        <div class="stats-header">
+            <h3>📊 İstatistikler</h3>
+            <button id="closeStatsBtn" class="btn-icon">✕</button>
+        </div>
+        <div id="statsContent" class="stats-content">
+            <div class="spinner"></div>
+        </div>
+    </aside>
+    <div id="statsBackdrop" class="stats-backdrop hidden"></div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Map Modal -->
+    <div id="mapModal" class="modal hidden">
+        <div class="modal-backdrop" id="mapBackdrop"></div>
+        <div class="modal-box map-modal-box">
+            <div class="modal-header">
+                <h3>🗺 Harita Görünümü</h3>
+                <span id="mapImageCount" class="map-count"></span>
+                <button id="closeMapBtn" class="btn-icon">✕</button>
+            </div>
+            <div id="mapContainer" style="height:520px; width:100%;"></div>
+            <div class="map-footer">
+                <span class="map-hint">GPS verisi olan fotoğraflar gösteriliyor</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watermark / Export Modal (Faz 5.4) -->
+    <div id="watermarkModal" class="modal hidden">
+        <div class="modal-backdrop" id="watermarkBackdrop"></div>
+        <div class="modal-box" style="max-width:420px">
+            <div class="modal-header">
+                <h3>📦 Zip İndir</h3>
+                <button id="closeWatermarkModalBtn" class="btn-icon">✕</button>
+            </div>
+            <div class="wm-body">
+                <label class="wm-toggle-row">
+                    <input type="checkbox" id="wmEnable">
+                    <span>Filigran (Watermark) Ekle</span>
+                </label>
+                <div id="wmOptions" class="wm-options hidden">
+                    <label class="exif-edit-label">Metin</label>
+                    <input type="text" id="wmText" class="search-input" placeholder="Ör: © 2026" maxlength="64" value="GalleryWeb">
+                    <label class="exif-edit-label">Konum</label>
+                    <select id="wmPosition" class="sort-select wm-select">
+                        <option value="bottom-right">Sağ Alt</option>
+                        <option value="bottom-left">Sol Alt</option>
+                        <option value="top-right">Sağ Üst</option>
+                        <option value="top-left">Sol Üst</option>
+                        <option value="center">Merkez</option>
+                    </select>
+                    <label class="exif-edit-label">Opaklık <span id="wmOpacityVal">60%</span></label>
+                    <input type="range" id="wmOpacity" min="10" max="100" step="5" value="60" class="wm-slider">
+                    <label class="exif-edit-label">Boyut <span id="wmSizeVal">4%</span></label>
+                    <input type="range" id="wmSize" min="2" max="10" step="1" value="4" class="wm-slider">
+                </div>
+                <div class="wm-footer">
+                    <span id="wmExportStatus" class="exif-edit-status"></span>
+                    <button id="wmExportBtn" class="btn btn-primary">📥 İndir</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Toggle Script -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebarBackdrop');
+        const isMobile = () => window.innerWidth <= 768;
+
+        function openDrawer() {
+            sidebar.classList.add('mobile-open');
+            backdrop.classList.add('visible');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeDrawer() {
+            sidebar.classList.remove('mobile-open');
+            backdrop.classList.remove('visible');
+            document.body.style.overflow = '';
+        }
+
+        if (sidebarToggleBtn && sidebar) {
+            sidebarToggleBtn.addEventListener('click', function() {
+                if (isMobile()) {
+                    sidebar.classList.contains('mobile-open') ? closeDrawer() : openDrawer();
+                } else {
+                    sidebar.classList.toggle('collapsed');
+                    localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+                }
+            });
+            if (backdrop) {
+                backdrop.addEventListener('click', closeDrawer);
+            }
+            // Restore desktop state
+            if (!isMobile() && localStorage.getItem('sidebarCollapsed') === 'true') {
+                sidebar.classList.add('collapsed');
+            }
+        }
+
+        // Mobile bottom nav wiring
+        const mbnFolder = document.getElementById('mbnFolderBtn');
+        const mbnFavs   = document.getElementById('mbnFavsBtn');
+        const mbnAlbums = document.getElementById('mbnAlbumsBtn');
+        const mbnStats  = document.getElementById('mbnStatsBtn');
+        const mbnMenu   = document.getElementById('mbnMenuBtn');
+
+        if (mbnFolder) mbnFolder.addEventListener('click', () => { const b = document.getElementById('selectDirBtn'); if(b) b.click(); });
+        if (mbnFavs)   mbnFavs.addEventListener('click',   () => { const b = document.getElementById('favsFilterBtn'); if(b) b.click(); });
+        if (mbnAlbums) mbnAlbums.addEventListener('click', () => { const b = document.getElementById('albumsBtn'); if(b) b.click(); });
+        if (mbnStats)  mbnStats.addEventListener('click',  () => { const b = document.getElementById('statsBtn'); if(b) b.click(); });
+        if (mbnMenu)   mbnMenu.addEventListener('click',   () => { if(isMobile()) openDrawer(); });
+
+        // Close drawer on resize to desktop
+        window.addEventListener('resize', () => { if (!isMobile()) closeDrawer(); });
+    });
+    </script>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/static/js/gallery.js?v=19"></script>
+    <script src="/static/js/keybinds.js?v=19"></script>
+    <script src="/static/js/slideshow.js?v=18"></script>
+</body>
+</html>

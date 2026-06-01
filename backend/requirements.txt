@@ -1,0 +1,10 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+Pillow  # Standart resim isleme kütüphanesi
+aiofiles==23.2.1
+python-multipart==0.0.6
+watchdog==3.0.0  # Klasör değişikliklerini izleme
+pyexiv2==2.15.5  # EXIF metadata okuma (opsiyonel)
+imagehash  # Perceptual hash ile duplicate tespiti
+pillow-heif==0.17.0  # HEIC/HEIF/AVIF desteği (sudo apt install libheif-dev gerektirir)
+qrcode[pil]==7.4.2  # QR kod paylaşım özelliği
