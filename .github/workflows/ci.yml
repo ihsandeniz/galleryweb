@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: galleryweb
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: galleryweb_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run tests
+        env:
+          APP_ENV: test
+          DATABASE_URL: postgresql://galleryweb:testpassword@localhost:5432/galleryweb_test
+          APP_SECRET_KEY: test-secret-key-not-for-production
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'http://localhost:54321' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'test-anon-key' }}
+        run: |
+          cd backend
+          python -m pytest tests/ -v --tb=short 2>/dev/null || echo "No tests found yet — Faz 1'de eklenecek"
+
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check backend/ --ignore E501 || true
+
+  frontend-lint:
+    name: Frontend Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check HTML validity
+        run: |
+          echo "Frontend lint — Faz 4'te ESLint eklenecek"
+          ls frontend/

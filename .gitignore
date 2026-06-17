@@ -5,7 +5,23 @@ __pycache__/
 *.so
 .env
 .env.local
+.env.production
 cache/
 *.log
 .DS_Store
 node_modules/
+
+# Database files
+*.db
+*.sqlite
+
+# Tauri build (Faz 5)
+src-tauri/target/
+
+# Capacitor (Faz 5)
+android/
+ios/
+.capacitor/
+
+# Test cache
+.pytest_cache/
