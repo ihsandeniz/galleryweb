@@ -1,6 +1,14 @@
 import logging
+import time as _time
+import secrets
+import hmac
+import hashlib
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 logger = logging.getLogger("galleryweb")
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -104,6 +112,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Photo Gallery Pro", lifespan=lifespan)
 
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
@@ -113,6 +126,28 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' ws: wss:; font-src 'self' data:"
+    return response
+
+
+@app.middleware("http")
+async def prefix_rewrite(request: Request, call_next):
+    # /yerel/api/... → /api/... prefix rewrite (frontend yerel modu uyumu)
+    if request.url.path.startswith("/yerel/api/"):
+        new_path = request.url.path[len("/yerel"):]
+        request.scope["path"] = new_path
+        request.scope["raw_path"] = new_path.encode()
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -128,6 +163,144 @@ async def no_cache_static(request: Request, call_next):
 @app.get("/")
 async def root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+
+@app.get("/login")
+async def login_page():
+    return FileResponse(str(FRONTEND_DIR / "login.html"))
+
+
+@app.get("/share")
+async def share_page():
+    return FileResponse(str(FRONTEND_DIR / "share.html"))
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse(str(FRONTEND_DIR / "favicon.ico"))
+
+
+# ──────────────────────────────────────────────
+# Demo Auth — hardcoded kullanıcı (Supabase olmadan)
+# ──────────────────────────────────────────────
+DEMO_USERS = {
+    "demo@gallery.local": "demo1234",
+    "admin@gallery.local": "admin1234",
+}
+_demo_tokens: dict = {}         # access_token  → email
+_demo_refresh_tokens: dict = {}  # refresh_token → {email, signature, issued_at}
+
+# Token signing configuration
+TOKEN_SECRET = os.getenv("TOKEN_SECRET", secrets.token_hex(32))
+
+def _sign_token(token: str) -> str:
+    """Generate HMAC-SHA256 signature for a token."""
+    return hmac.new(TOKEN_SECRET.encode(), token.encode(), hashlib.sha256).hexdigest()
+
+def _verify_token_signature(token: str, sig: str) -> bool:
+    """Verify token signature using constant-time comparison."""
+    expected = _sign_token(token)
+    return hmac.compare_digest(expected, sig)
+
+
+class AuthLoginBody(BaseModel):
+    email: str
+    password: str
+
+
+class AuthSignupBody(BaseModel):
+    email: str
+    password: str
+    full_name: str | None = None
+
+
+def _issue_tokens(email: str) -> tuple[str, str]:
+    """Return (access_token, refresh_token) — with HMAC signature and expiry."""
+    access = secrets.token_hex(32)
+    refresh = secrets.token_hex(32)
+
+    _demo_tokens[access] = email
+
+    # Store refresh token with signature and issued_at timestamp
+    # Refresh tokens expire in 7 days (604800 seconds)
+    _demo_refresh_tokens[refresh] = {
+        "email": email,
+        "signature": _sign_token(refresh),
+        "issued_at": time.time(),
+        "expires_at": time.time() + 604800  # 7 days
+    }
+    return access, refresh
+
+
+@app.post("/auth/login")
+@limiter.limit("5/minute")
+async def auth_login(request: Request, body: AuthLoginBody):
+    expected = DEMO_USERS.get(body.email)
+    if not expected or expected != body.password:
+        raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı")
+    access, refresh = _issue_tokens(body.email)
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "expires_in": 86400,
+        "user": {"id": "demo-001", "email": body.email, "full_name": "Demo Kullanıcı"},
+    }
+
+
+@app.post("/auth/signup")
+@limiter.limit("5/minute")
+async def auth_signup(request: Request, body: AuthSignupBody):
+    access, refresh = _issue_tokens(body.email)
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "expires_in": 86400,
+        "user": {"id": "demo-new", "email": body.email, "full_name": body.full_name or "Yeni Kullanıcı"},
+    }
+
+
+@app.post("/auth/refresh")
+async def auth_refresh(request: Request):
+    data = await request.json()
+    rt = data.get("refresh_token", "")
+    rt_data = _demo_refresh_tokens.pop(rt, None)
+
+    if not rt_data:
+        raise HTTPException(status_code=401, detail="Geçersiz refresh token")
+
+    # Verify token signature (constant-time comparison)
+    if not _verify_token_signature(rt, rt_data.get("signature", "")):
+        raise HTTPException(status_code=401, detail="Token imzası doğrulanamadı")
+
+    # Check if refresh token has expired
+    if time.time() > rt_data.get("expires_at", 0):
+        raise HTTPException(status_code=401, detail="Refresh token süresi dolmuş")
+
+    email = rt_data.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Geçersiz token verisi")
+
+    # Issue new tokens
+    access, new_refresh = _issue_tokens(email)
+    return {
+        "access_token": access,
+        "refresh_token": new_refresh,
+        "expires_in": 86400,
+    }
+
+
+@app.post("/auth/logout")
+async def auth_logout(request: Request):
+    auth = request.headers.get("Authorization", "")
+    token = auth.replace("Bearer ", "")
+    _demo_tokens.pop(token, None)
+    return {"ok": True}
+
+
+@app.get("/auth/forgot-password")
+@app.post("/auth/forgot-password")
+async def auth_forgot(_: Request):
+    return {"ok": True, "message": "Demo modda şifre sıfırlama aktif değil"}
 
 
 # ──────────────────────────────────────────────
@@ -150,7 +323,13 @@ async def set_directory(data: dict):
         raise HTTPException(400, "Geçersiz klasör yolu")
     path = os.path.expanduser(path.strip())
     if not os.path.isdir(path):
-        raise HTTPException(400, f"Geçersiz klasör yolu: {path}")
+        # Path artık mevcut değil → home'a düş, 400 fırlatma
+        fallback = str(Path.home())
+        p = Path(fallback)
+        current_directories = [p]
+        current_directory = p
+        return {"status": "fallback", "path": fallback, "directories": [fallback],
+                "warning": f"'{path}' bulunamadı, ana dizine geçildi"}
     p = Path(path)
     current_directories = [p]
     current_directory = p
@@ -200,7 +379,10 @@ async def clear_directory():
 async def browse_directory(path: str = "/"):
     target = Path(os.path.expanduser(path.strip()))
     if not target.is_dir():
-        raise HTTPException(400, "Geçersiz yol")
+        # Geçersiz path → home dizinine düş, hata fırlatma
+        target = Path.home()
+        if not target.is_dir():
+            target = Path("/")
     entries = []
     try:
         for entry in sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
@@ -221,7 +403,9 @@ async def browse_directory(path: str = "/"):
 # ──────────────────────────────────────────────
 
 @app.get("/api/images")
+@limiter.limit("60/minute")
 async def get_images(
+    request: Request,
     page: int = 1,
     per_page: int = 50,
     search: str = "",
@@ -650,7 +834,8 @@ MAX_ZIP_SIZE = 500 * 1024 * 1024  # 500 MB
 
 
 @app.post("/api/export")
-async def export_zip(data: dict):
+@limiter.limit("10/minute")
+async def export_zip(request: Request, data: dict):
     if not current_directories:
         raise HTTPException(400, "Klasör seçilmemiş")
     paths = data.get("paths", [])

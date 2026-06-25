@@ -1,10 +1,40 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-Pillow  # Standart resim isleme kütüphanesi
-aiofiles==23.2.1
-python-multipart==0.0.6
-watchdog==3.0.0  # Klasör değişikliklerini izleme
-pyexiv2==2.15.5  # EXIF metadata okuma (opsiyonel)
-imagehash  # Perceptual hash ile duplicate tespiti
-pillow-heif==0.17.0  # HEIC/HEIF/AVIF desteği (sudo apt install libheif-dev gerektirir)
-qrcode[pil]==7.4.2  # QR kod paylaşım özelliği
+# ── Core ──────────────────────────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+pydantic[email]
+
+# ── Database (PostgreSQL async) ───────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+
+# ── Supabase ──────────────────────────────────────────────────────────────────
+supabase==2.10.0
+PyJWT==2.10.1
+
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+
+# ── File handling ─────────────────────────────────────────────────────────────
+aiofiles==24.1.0
+python-multipart==0.0.17
+Pillow==11.0.0
+pillow-heif==0.21.0
+
+# ── Storage (R2 / S3 compatible — Faz 3) ─────────────────────────────────────
+boto3==1.35.74
+
+# ── CLIP Semantic Search (Faz 7) ──────────────────────────────────────────────
+pgvector==0.3.6
+sentence-transformers==3.3.1
+APScheduler==3.10.4
+
+# ── Rate limiting & security ──────────────────────────────────────────────────
+slowapi==0.1.9
+
+# ── Existing features (keep for main.py compatibility) ────────────────────────
+watchdog==3.0.0
+imagehash==4.3.1
+qrcode[pil]==7.4.2

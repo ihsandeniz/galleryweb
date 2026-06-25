@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GalleryPro — Giriş</title>
+    <meta name="theme-color" content="#06080c">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-base:      #06080c;
+            --bg-surface:   #0a0e14;
+            --bg-elevated:  #0f151e;
+            --bg-glass:     rgba(10,14,20,0.92);
+            --border-dim:   rgba(0,210,255,0.08);
+            --border-def:   rgba(0,210,255,0.18);
+            --border-act:   rgba(0,210,255,0.5);
+            --accent:       #00d2ff;
+            --accent-glow:  rgba(0,210,255,0.18);
+            --accent-dim:   rgba(0,210,255,0.08);
+            --danger:       #ff3d5a;
+            --success:      #00e5a0;
+            --text-primary: #d8e4f0;
+            --text-sec:     #4a5a6a;
+            --text-dim:     #2a3a4a;
+            --font-mono:    'JetBrains Mono', monospace;
+            --font-sans:    'Inter', sans-serif;
+        }
+
+        html, body {
+            height: 100%;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Scan-line overlay */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 3px,
+                rgba(0,210,255,0.012) 3px,
+                rgba(0,210,255,0.012) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+
+        /* Logo */
+        .login-logo {
+            font-family: var(--font-mono);
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            margin-bottom: 36px;
+            color: var(--text-primary);
+        }
+        .login-logo span {
+            color: var(--accent);
+            text-shadow: 0 0 12px var(--accent);
+        }
+
+        /* Card */
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-def);
+            border-radius: 10px;
+            padding: 32px 28px;
+            box-shadow: 0 0 40px rgba(0,210,255,0.06), 0 16px 40px rgba(0,0,0,0.5);
+        }
+
+        /* Tabs */
+        .auth-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 28px;
+            border-bottom: 1px solid var(--border-dim);
+        }
+        .auth-tab {
+            flex: 1;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 10px 0 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-sec);
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .auth-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* Form panels */
+        .auth-panel { display: none; }
+        .auth-panel.active { display: block; }
+
+        /* Form fields */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-sec);
+            margin-bottom: 7px;
+        }
+        .form-input {
+            width: 100%;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-def);
+            border-radius: 6px;
+            padding: 10px 13px;
+            font-family: var(--font-sans);
+            font-size: 14px;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-input::placeholder { color: var(--text-dim); }
+        .form-input:focus {
+            border-color: var(--border-act);
+            box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+
+        /* Submit button */
+        .btn-submit {
+            width: 100%;
+            margin-top: 8px;
+            padding: 11px 0;
+            background: transparent;
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            color: var(--accent);
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-submit:hover, .btn-submit:focus {
+            background: var(--accent-glow);
+            box-shadow: 0 0 18px var(--accent-glow);
+            outline: none;
+        }
+        .btn-submit:active { opacity: 0.8; }
+        .btn-submit:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        /* Spinner inside button */
+        .btn-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(0,210,255,0.3);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Error / success toast */
+        .auth-msg {
+            display: none;
+            padding: 10px 13px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 14px;
+            border-left: 3px solid;
+        }
+        .auth-msg.error {
+            display: block;
+            background: rgba(255,61,90,0.08);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+        .auth-msg.success {
+            display: block;
+            background: rgba(0,229,160,0.08);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        /* Footer hint */
+        .login-hint {
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--text-dim);
+            text-align: center;
+            font-family: var(--font-mono);
+        }
+        .login-hint a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .login-hint a:hover { text-decoration: underline; }
+
+        /* Divider */
+        .form-divider {
+            height: 1px;
+            background: var(--border-dim);
+            margin: 20px 0;
+        }
+
+        /* Forgot password link */
+        .forgot-link {
+            display: block;
+            text-align: right;
+            margin-top: 6px;
+            font-size: 12px;
+            font-family: var(--font-mono);
+            color: var(--text-sec);
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .forgot-link:hover { color: var(--accent); }
+
+        /* Forgot password inline panel */
+        .forgot-panel {
+            display: none;
+            margin-top: 18px;
+            padding: 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-dim);
+            border-radius: 6px;
+        }
+        .forgot-panel.open { display: block; }
+        .forgot-panel-title {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-sec);
+            margin-bottom: 10px;
+        }
+        .forgot-row {
+            display: flex;
+            gap: 8px;
+        }
+        .forgot-row .form-input { flex: 1; }
+        .btn-forgot-send {
+            padding: 10px 14px;
+            background: transparent;
+            border: 1px solid var(--border-def);
+            border-radius: 6px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--accent);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .btn-forgot-send:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .btn-forgot-send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* Responsive */
+        @media (max-width: 440px) {
+            .login-card { padding: 24px 18px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-logo">Gallery<span>Pro</span></div>
+
+        <div class="login-card">
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tabGiris" onclick="switchTab('giris')">Giriş Yap</button>
+                <button class="auth-tab" id="tabKayit" onclick="switchTab('kayit')">Kayıt Ol</button>
+            </div>
+
+            <!-- Login Panel -->
+            <div class="auth-panel active" id="panelGiris">
+                <form id="formGiris" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="loginEmail">E-posta</label>
+                        <input type="email" id="loginEmail" class="form-input" placeholder="ornek@domain.com" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="loginPassword">Şifre</label>
+                        <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required autocomplete="current-password" minlength="8">
+                    </div>
+                    <button type="submit" class="btn-submit" id="btnGiris">Giriş Yap</button>
+                    <div class="auth-msg" id="msgGiris"></div>
+                    <button type="button" class="forgot-link" onclick="toggleForgot()">Şifremi unuttum</button>
+                    <div class="forgot-panel" id="forgotPanel">
+                        <div class="forgot-panel-title">Şifre Sıfırla</div>
+                        <div class="forgot-row">
+                            <input type="email" id="forgotEmail" class="form-input" placeholder="E-posta adresiniz" autocomplete="email">
+                            <button type="button" class="btn-forgot-send" id="btnForgot" onclick="handleForgot()">Gönder</button>
+                        </div>
+                        <div class="auth-msg" id="msgForgot"></div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Signup Panel -->
+            <div class="auth-panel" id="panelKayit">
+                <form id="formKayit" onsubmit="handleSignup(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="signupName">Ad Soyad <span style="color:var(--text-dim)">(isteğe bağlı)</span></label>
+                        <input type="text" id="signupName" class="form-input" placeholder="Adınız" autocomplete="name" maxlength="80">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="signupEmail">E-posta</label>
+                        <input type="email" id="signupEmail" class="form-input" placeholder="ornek@domain.com" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="signupPassword">Şifre <span style="color:var(--text-dim)">(en az 8 karakter)</span></label>
+                        <input type="password" id="signupPassword" class="form-input" placeholder="••••••••" required autocomplete="new-password" minlength="8">
+                    </div>
+                    <button type="submit" class="btn-submit" id="btnKayit">Hesap Oluştur</button>
+                    <div class="auth-msg" id="msgKayit"></div>
+                </form>
+            </div>
+        </div>
+
+        <p class="login-hint">GalleryPro v1.0 — Fotoğraf Galerisi SaaS</p>
+    </div>
+
+    <script src="/static/js/auth.js?v=1"></script>
+    <script>
+        // Redirect if already logged in
+        if (window.GW && window.GW.isTokenValid()) {
+            window.location.replace('/');
+        }
+
+        function switchTab(tab) {
+            const isGiris = tab === 'giris';
+            document.getElementById('tabGiris').classList.toggle('active', isGiris);
+            document.getElementById('tabKayit').classList.toggle('active', !isGiris);
+            document.getElementById('panelGiris').classList.toggle('active', isGiris);
+            document.getElementById('panelKayit').classList.toggle('active', !isGiris);
+            clearMessages();
+        }
+
+        function clearMessages() {
+            ['msgGiris', 'msgKayit'].forEach(id => {
+                const el = document.getElementById(id);
+                el.className = 'auth-msg';
+                el.textContent = '';
+            });
+        }
+
+        function showMsg(id, text, type) {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = `auth-msg ${type}`;
+        }
+
+        function setLoading(btnId, loading, label) {
+            const btn = document.getElementById(btnId);
+            btn.disabled = loading;
+            btn.innerHTML = loading
+                ? `<span class="btn-spinner"></span>${label}`
+                : label;
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email    = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            setLoading('btnGiris', true, 'Giriş yapılıyor...');
+            clearMessages();
+            try {
+                await window.GW.login(email, password);
+                showMsg('msgGiris', 'Giriş başarılı, yönlendiriliyor...', 'success');
+                setTimeout(() => { window.location.href = '/'; }, 600);
+            } catch (err) {
+                showMsg('msgGiris', err.message || 'Giriş başarısız', 'error');
+            } finally {
+                setLoading('btnGiris', false, 'Giriş Yap');
+            }
+        }
+
+        function toggleForgot() {
+            const p = document.getElementById('forgotPanel');
+            p.classList.toggle('open');
+            if (p.classList.contains('open')) {
+                document.getElementById('forgotEmail').focus();
+            }
+        }
+
+        async function handleForgot() {
+            const email = document.getElementById('forgotEmail').value.trim();
+            if (!email) return;
+            const btn = document.getElementById('btnForgot');
+            btn.disabled = true;
+            btn.textContent = '...';
+            try {
+                const res = await fetch('/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                });
+                const msgEl = document.getElementById('msgForgot');
+                if (res.ok) {
+                    msgEl.textContent = 'E-posta gönderildi (gelen kutunuzu kontrol edin)';
+                    msgEl.className = 'auth-msg success';
+                } else {
+                    msgEl.textContent = 'Bir hata oluştu, tekrar deneyin';
+                    msgEl.className = 'auth-msg error';
+                }
+            } catch {
+                document.getElementById('msgForgot').className = 'auth-msg error';
+                document.getElementById('msgForgot').textContent = 'Bağlantı hatası';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Gönder';
+            }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const name     = document.getElementById('signupName').value.trim();
+            const email    = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            setLoading('btnKayit', true, 'Hesap oluşturuluyor...');
+            clearMessages();
+            try {
+                await window.GW.signup(email, password, name || null);
+                showMsg('msgKayit', 'Hesap oluşturuldu, yönlendiriliyor...', 'success');
+                setTimeout(() => { window.location.href = '/'; }, 600);
+            } catch (err) {
+                showMsg('msgKayit', err.message || 'Kayıt başarısız', 'error');
+            } finally {
+                setLoading('btnKayit', false, 'Hesap Oluştur');
+            }
+        }
+    </script>
+</body>
+</html>

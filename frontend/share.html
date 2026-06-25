@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GalleryPro — Paylaşılan Galeri</title>
+    <style>
+        /* ── Reset & Base ─────────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #06080c;
+            --bg2: #0d1117;
+            --bg3: #161b22;
+            --border: #21262d;
+            --accent: #00d2ff;
+            --accent2: #0099bb;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --danger: #f85149;
+            --success: #3fb950;
+            --font: 'JetBrains Mono', 'Fira Mono', monospace;
+        }
+        html { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+        body { min-height: 100vh; }
+
+        /* ── Scan-line overlay ────────────────────────────────────────── */
+        body::before {
+            content: '';
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,210,255,.015) 2px, rgba(0,210,255,.015) 4px);
+        }
+
+        /* ── Password Modal ──────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 100;
+            background: rgba(6,8,12,.92);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-box {
+            background: var(--bg2);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 36px 40px;
+            width: 380px; max-width: 95vw;
+            box-shadow: 0 0 40px rgba(0,210,255,.2);
+            position: relative; z-index: 1;
+        }
+        .modal-logo { font-size: 1.1rem; color: var(--accent); letter-spacing: .15em; margin-bottom: 6px; }
+        .modal-title { font-size: 1rem; color: var(--muted); margin-bottom: 24px; }
+        .modal-input {
+            width: 100%; background: var(--bg3); border: 1px solid var(--border);
+            color: var(--text); font-family: var(--font); font-size: .9rem;
+            padding: 10px 14px; border-radius: 4px; outline: none;
+            transition: border-color .2s;
+        }
+        .modal-input:focus { border-color: var(--accent); }
+        .modal-btn {
+            width: 100%; margin-top: 12px;
+            background: var(--accent); color: #000; border: none; border-radius: 4px;
+            font-family: var(--font); font-size: .9rem; font-weight: 700;
+            padding: 10px; cursor: pointer; letter-spacing: .05em;
+            transition: background .2s;
+        }
+        .modal-btn:hover { background: var(--accent2); }
+        .modal-err { color: var(--danger); font-size: .8rem; margin-top: 8px; min-height: 1.2em; }
+
+        /* ── Header ─────────────────────────────────────────────────── */
+        .share-header {
+            position: relative; z-index: 10;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 24px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(13,17,23,.9);
+            backdrop-filter: blur(8px);
+        }
+        .share-logo { font-size: 1rem; color: var(--accent); letter-spacing: .12em; }
+        .share-logo span { color: var(--muted); }
+        .share-badge {
+            font-size: .75rem; color: var(--muted);
+            border: 1px solid var(--border); border-radius: 20px;
+            padding: 3px 10px; letter-spacing: .05em;
+        }
+
+        /* ── Gallery info bar ────────────────────────────────────────── */
+        .info-bar {
+            position: relative; z-index: 10;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+        }
+        .info-bar-title { font-size: .9rem; color: var(--text); }
+        .info-badge {
+            font-size: .72rem; padding: 2px 8px; border-radius: 3px;
+            border: 1px solid var(--accent); color: var(--accent); letter-spacing: .05em;
+        }
+        .info-count { font-size: .75rem; color: var(--muted); }
+
+        /* ── Toolbar ─────────────────────────────────────────────────── */
+        .toolbar {
+            position: relative; z-index: 10;
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+        .tool-btn {
+            background: var(--bg3); border: 1px solid var(--border);
+            color: var(--muted); font-family: var(--font); font-size: .78rem;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer;
+            transition: all .15s; white-space: nowrap;
+        }
+        .tool-btn:hover, .tool-btn.active { border-color: var(--accent); color: var(--accent); }
+        .tool-sep { flex: 1; }
+        #selectionCount {
+            font-size: .78rem; color: var(--accent);
+            border: 1px solid var(--accent); border-radius: 3px;
+            padding: 4px 10px; display: none;
+        }
+        #selectionCount.visible { display: block; }
+
+        /* ── Photo Grid ──────────────────────────────────────────────── */
+        .gallery-main {
+            position: relative; z-index: 1;
+            padding: 20px 24px;
+        }
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .photo-card {
+            position: relative; background: var(--bg3);
+            border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+            cursor: pointer; transition: border-color .2s, transform .15s;
+            aspect-ratio: 3/2;
+        }
+        .photo-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .photo-card.selected { border-color: var(--accent); box-shadow: 0 0 12px rgba(0,210,255,.35); }
+        .photo-card img {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+            transition: opacity .2s;
+        }
+        .photo-card img.loading { opacity: .4; }
+
+        /* Card overlays */
+        .card-actions {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 8px;
+            background: linear-gradient(0deg, rgba(6,8,12,.9) 0%, transparent 100%);
+            opacity: 0; transition: opacity .2s;
+        }
+        .photo-card:hover .card-actions { opacity: 1; }
+        .card-btn {
+            background: rgba(13,17,23,.7); border: 1px solid rgba(255,255,255,.15);
+            color: var(--text); font-size: .75rem; padding: 4px 8px; border-radius: 3px;
+            cursor: pointer; transition: all .15s; font-family: var(--font);
+        }
+        .card-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .card-btn.voted { color: #ff6b6b; border-color: #ff6b6b; }
+        .card-btn.sel-active { color: var(--accent); border-color: var(--accent); }
+        .vote-count { font-size: .7rem; color: var(--muted); }
+        .select-check {
+            position: absolute; top: 8px; right: 8px;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--accent); color: #000;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .7rem; font-weight: 700;
+            opacity: 0; transition: opacity .2s;
+        }
+        .photo-card.selected .select-check { opacity: 1; }
+
+        /* ── Lightbox ────────────────────────────────────────────────── */
+        .lightbox {
+            position: fixed; inset: 0; z-index: 200;
+            background: rgba(6,8,12,.97);
+            display: flex; flex-direction: column;
+        }
+        .lightbox.hidden { display: none; }
+        .lb-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 20px; border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .lb-close {
+            background: none; border: none; color: var(--muted); font-size: 1.2rem;
+            cursor: pointer; padding: 4px 8px;
+            transition: color .15s;
+        }
+        .lb-close:hover { color: var(--text); }
+        .lb-filename { font-size: .85rem; color: var(--muted); flex: 1; }
+        .lb-actions { display: flex; gap: 8px; }
+        .lb-btn {
+            background: var(--bg3); border: 1px solid var(--border);
+            color: var(--text); font-family: var(--font); font-size: .8rem;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer;
+            transition: all .15s;
+        }
+        .lb-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .lb-btn.voted { color: #ff6b6b; border-color: #ff6b6b; }
+        .lb-btn.sel-active { color: var(--accent); border-color: var(--accent); }
+        .lb-body {
+            display: flex; flex: 1; overflow: hidden;
+        }
+        .lb-img-area {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            padding: 20px; position: relative;
+        }
+        .lb-img-area img {
+            max-width: 100%; max-height: 100%; object-fit: contain;
+            border-radius: 4px;
+        }
+        .lb-nav-btn {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(13,17,23,.8); border: 1px solid var(--border);
+            color: var(--muted); font-size: 1.4rem; padding: 8px 14px; cursor: pointer;
+            border-radius: 4px; transition: all .15s;
+        }
+        .lb-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .lb-nav-prev { left: 12px; }
+        .lb-nav-next { right: 12px; }
+        .lb-sidebar {
+            width: 300px; border-left: 1px solid var(--border);
+            display: flex; flex-direction: column; flex-shrink: 0;
+        }
+        .lb-sidebar-tabs {
+            display: flex; border-bottom: 1px solid var(--border);
+        }
+        .lb-tab {
+            flex: 1; background: none; border: none; border-bottom: 2px solid transparent;
+            color: var(--muted); font-family: var(--font); font-size: .8rem;
+            padding: 10px; cursor: pointer; transition: all .15s;
+        }
+        .lb-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .lb-tab-content { flex: 1; overflow-y: auto; padding: 12px; display: none; }
+        .lb-tab-content.active { display: block; }
+
+        /* Comments */
+        .comment-list { margin-bottom: 12px; }
+        .comment-item {
+            padding: 8px 0; border-bottom: 1px solid var(--border);
+        }
+        .comment-item:last-child { border-bottom: none; }
+        .comment-author { font-size: .72rem; color: var(--accent); margin-bottom: 2px; }
+        .comment-time { font-size: .65rem; color: var(--muted); margin-left: 6px; }
+        .comment-body { font-size: .8rem; color: var(--text); line-height: 1.4; }
+        .comment-form { display: flex; flex-direction: column; gap: 6px; }
+        .comment-input, .comment-name {
+            background: var(--bg3); border: 1px solid var(--border);
+            color: var(--text); font-family: var(--font); font-size: .8rem;
+            padding: 7px 10px; border-radius: 4px; outline: none;
+            transition: border-color .2s;
+        }
+        .comment-input:focus, .comment-name:focus { border-color: var(--accent); }
+        .comment-input { resize: vertical; min-height: 60px; }
+        .comment-send {
+            background: var(--accent); color: #000; border: none; border-radius: 4px;
+            font-family: var(--font); font-size: .78rem; font-weight: 700;
+            padding: 7px; cursor: pointer; transition: background .2s;
+        }
+        .comment-send:hover { background: var(--accent2); }
+        .comment-send:disabled { opacity: .5; cursor: not-allowed; }
+        .comment-empty { font-size: .8rem; color: var(--muted); text-align: center; padding: 20px 0; }
+
+        /* ── Bottom comment panel (gallery-level) ────────────────────── */
+        .gallery-comment-panel {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+            background: var(--bg2); border-top: 1px solid var(--border);
+            padding: 12px 24px; display: none;
+        }
+        .gallery-comment-panel.open { display: block; }
+        .gcp-title { font-size: .8rem; color: var(--accent); margin-bottom: 8px; }
+        .gcp-row { display: flex; gap: 8px; }
+        .gcp-name, .gcp-body {
+            background: var(--bg3); border: 1px solid var(--border);
+            color: var(--text); font-family: var(--font); font-size: .8rem;
+            padding: 7px 10px; border-radius: 4px; outline: none;
+        }
+        .gcp-name:focus, .gcp-body:focus { border-color: var(--accent); }
+        .gcp-name { width: 140px; flex-shrink: 0; }
+        .gcp-body { flex: 1; }
+        .gcp-send {
+            background: var(--accent); color: #000; border: none; border-radius: 4px;
+            font-family: var(--font); font-size: .78rem; font-weight: 700;
+            padding: 7px 14px; cursor: pointer; flex-shrink: 0;
+        }
+
+        /* ── States ──────────────────────────────────────────────────── */
+        .loading-state, .error-state {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 80px 20px; gap: 12px;
+        }
+        .loading-spinner {
+            width: 36px; height: 36px;
+            border: 3px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .state-msg { font-size: .9rem; color: var(--muted); }
+        .state-title { font-size: 1.1rem; color: var(--text); }
+        .empty-grid { padding: 60px 24px; text-align: center; color: var(--muted); font-size: .9rem; }
+
+        /* ── Responsive ──────────────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .photo-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+            .lb-sidebar { display: none; }
+            .gallery-main { padding: 12px; }
+            .info-bar, .toolbar { padding: 10px 12px; }
+        }
+        @media (max-width: 400px) {
+            .photo-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Password Modal -->
+<div class="modal-overlay" id="pwModal">
+    <div class="modal-box">
+        <div class="modal-logo">Gallery<span style="color:var(--muted)">Pro</span></div>
+        <div class="modal-title">Bu galeri şifre korumalı</div>
+        <input type="password" class="modal-input" id="pwInput" placeholder="Şifreyi girin" autocomplete="current-password">
+        <button class="modal-btn" id="pwBtn" onclick="submitPassword()">Devam Et →</button>
+        <div class="modal-err" id="pwErr"></div>
+    </div>
+</div>
+
+<!-- Header -->
+<header class="share-header">
+    <div class="share-logo">Gallery<span>Pro</span></div>
+    <div class="share-badge" id="headerBadge">Paylaşılan Galeri</div>
+</header>
+
+<!-- Content (initially hidden until loaded) -->
+<div id="mainContent" style="display:none">
+
+    <!-- Info bar -->
+    <div class="info-bar">
+        <span class="info-bar-title" id="galleryTitle">—</span>
+        <span class="info-badge" id="photoCountBadge">0 fotoğraf</span>
+        <span id="downloadBadge" class="info-badge" style="display:none">İndirme ✓</span>
+        <span id="selectionBadge" class="info-badge" style="display:none">Seçim modu ✓</span>
+        <span class="info-count" id="viewMsg"></span>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <button class="tool-btn" id="btnGrid2" onclick="setLayout(2)">▦ 2</button>
+        <button class="tool-btn active" id="btnGrid3" onclick="setLayout(3)">▦ 3</button>
+        <button class="tool-btn" id="btnGrid4" onclick="setLayout(4)">▦ 4</button>
+        <div class="tool-sep"></div>
+        <span id="selectionCount" class="visible" style="display:none">0 seçili</span>
+        <button class="tool-btn" id="btnComment" onclick="toggleCommentPanel()" style="display:none">💬 Yorum Ekle</button>
+    </div>
+
+    <!-- Photo Grid -->
+    <div class="gallery-main">
+        <div class="photo-grid" id="photoGrid"></div>
+        <div class="empty-grid hidden" id="emptyMsg">Bu galeride henüz fotoğraf yok.</div>
+    </div>
+
+</div>
+
+<!-- Loading / Error states -->
+<div class="loading-state" id="loadingState">
+    <div class="loading-spinner"></div>
+    <div class="state-msg">Galeri yükleniyor...</div>
+</div>
+<div class="error-state hidden" id="errorState">
+    <div class="state-title" id="errTitle">Hata</div>
+    <div class="state-msg" id="errMsg">Galeri yüklenemedi.</div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox hidden" id="lightbox">
+    <div class="lb-header">
+        <button class="lb-close" onclick="closeLightbox()">✕</button>
+        <div class="lb-filename" id="lbFilename"></div>
+        <div class="lb-actions">
+            <button class="lb-btn" id="lbVoteBtn" onclick="lbToggleVote()">♥ Beğen</button>
+            <button class="lb-btn" id="lbSelBtn" onclick="lbToggleSelect()" style="display:none">✓ Seç</button>
+            <button class="lb-btn" id="lbDlBtn" onclick="lbDownload()" style="display:none">⬇ İndir</button>
+        </div>
+    </div>
+    <div class="lb-body">
+        <div class="lb-img-area">
+            <button class="lb-nav-btn lb-nav-prev" onclick="lbNav(-1)">‹</button>
+            <img id="lbImg" src="" alt="">
+            <button class="lb-nav-btn lb-nav-next" onclick="lbNav(1)">›</button>
+        </div>
+        <div class="lb-sidebar" id="lbSidebar">
+            <div class="lb-sidebar-tabs">
+                <button class="lb-tab active" onclick="lbSwitchTab('comments')">Yorumlar</button>
+                <button class="lb-tab" onclick="lbSwitchTab('info')">Bilgi</button>
+            </div>
+            <div class="lb-tab-content active" id="tabComments">
+                <div class="comment-list" id="lbCommentList"></div>
+                <div class="comment-form">
+                    <input type="text" class="comment-name" id="lbCommentName" placeholder="Adınız (opsiyonel)" maxlength="80">
+                    <textarea class="comment-input" id="lbCommentInput" placeholder="Yorum yazın..." maxlength="2000" rows="3"></textarea>
+                    <button class="comment-send" onclick="submitComment()">Gönder</button>
+                </div>
+            </div>
+            <div class="lb-tab-content" id="tabInfo">
+                <div id="lbInfoContent" style="font-size:.8rem;color:var(--muted);line-height:1.8"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gallery-level comment panel -->
+<div class="gallery-comment-panel" id="gcPanel">
+    <div class="gcp-title">💬 Galeri Yorumu</div>
+    <div class="gcp-row">
+        <input type="text" class="gcp-name" id="gcpName" placeholder="Adınız" maxlength="80">
+        <input type="text" class="gcp-body" id="gcpBody" placeholder="Yorum..." maxlength="2000">
+        <button class="gcp-send" onclick="submitGalleryComment()">Gönder</button>
+    </div>
+</div>
+
+<script>
+// ── State ───────────────────────────────────────────────────────────────────
+const API = '/api/sharing';
+let linkId = '';
+let password = null;
+let linkData = null;   // { allow_download, allow_selection, photos }
+let photos = [];
+let votes = {};        // photoId → { vote_count, user_voted }
+let selections = new Set(); // selected photo IDs
+let lbIndex = 0;
+let lbComments = [];
+let fingerprint = _fp();
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(function init() {
+    const m = location.pathname.match(/\/share\/([^/]+)/);
+    if (!m) return showError('Geçersiz URL', 'Paylaşım linki bulunamadı.');
+    linkId = m[1];
+
+    // Check if password-protected first
+    _fetchLinkInfo();
+})();
+
+async function _fetchLinkInfo() {
+    try {
+        const res = await fetch(`${API}/${linkId}`);
+        if (res.status === 404) return showError('Bulunamadı', 'Bu paylaşım linki mevcut değil.');
+        if (res.status === 410) return showError('Süresi Doldu', 'Bu paylaşım linkinin süresi dolmuş.');
+        // info fetched fine — check if we need password by trying to load photos
+        _loadGallery();
+    } catch (_) {
+        // Might still work — try loading
+        _loadGallery();
+    }
+}
+
+async function _loadGallery(pw) {
+    try {
+        let url = `${API}/${linkId}/photos`;
+        if (pw) url += `?password=${encodeURIComponent(pw)}`;
+
+        const res = await fetch(url);
+        if (res.status === 401) {
+            // Password required
+            document.getElementById('pwModal').classList.remove('hidden');
+            document.getElementById('loadingState').classList.add('hidden');
+            if (pw) {
+                document.getElementById('pwErr').textContent = 'Şifre yanlış, tekrar deneyin.';
+            }
+            return;
+        }
+        if (res.status === 404) return showError('Bulunamadı', 'Paylaşım linki bulunamadı.');
+        if (res.status === 410) return showError('Süresi Doldu', 'Paylaşım linkinin süresi dolmuş.');
+        if (!res.ok) return showError('Hata', 'Galeri yüklenemedi.');
+
+        const data = await res.json();
+        linkData = data;
+        photos = data.photos || [];
+        password = pw || null;
+
+        // Close password modal if open
+        document.getElementById('pwModal').classList.add('hidden');
+        document.getElementById('loadingState').classList.add('hidden');
+        document.getElementById('mainContent').style.display = '';
+
+        _renderGallery();
+        _loadVotes();
+        if (data.allow_selection) _loadSelections();
+    } catch (e) {
+        showError('Hata', 'Sunucuya bağlanılamadı.');
+    }
+}
+
+function submitPassword() {
+    const pw = document.getElementById('pwInput').value.trim();
+    if (!pw) { document.getElementById('pwErr').textContent = 'Şifre boş olamaz.'; return; }
+    document.getElementById('pwBtn').textContent = '...';
+    _loadGallery(pw);
+    document.getElementById('pwBtn').textContent = 'Devam Et →';
+}
+document.getElementById('pwInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitPassword();
+});
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function _renderGallery() {
+    document.getElementById('galleryTitle').textContent = `Galeri #${linkData.gallery_id}`;
+    document.getElementById('photoCountBadge').textContent = `${photos.length} fotoğraf`;
+
+    if (linkData.allow_download) document.getElementById('downloadBadge').style.display = '';
+    if (linkData.allow_selection) {
+        document.getElementById('selectionBadge').style.display = '';
+        document.getElementById('selectionCount').style.display = '';
+        document.getElementById('selectionCount').classList.add('visible');
+    }
+    document.getElementById('btnComment').style.display = '';
+
+    const grid = document.getElementById('photoGrid');
+    grid.innerHTML = '';
+
+    if (!photos.length) {
+        document.getElementById('emptyMsg').classList.remove('hidden');
+        return;
+    }
+
+    photos.forEach((p, i) => {
+        const card = document.createElement('div');
+        card.className = 'photo-card';
+        card.dataset.idx = i;
+
+        const imgSrc = _thumbUrl(p);
+        card.innerHTML = `
+            <img src="${imgSrc}" alt="${_esc(p.filename)}" loading="lazy" class="loading"
+                 onload="this.classList.remove('loading')" onerror="this.src='/static/favicon.ico'">
+            <div class="select-check">✓</div>
+            <div class="card-actions">
+                <button class="card-btn" data-id="${p.id}" onclick="toggleVote(event,${p.id})">♥ <span class="vote-count" id="vc-${p.id}">0</span></button>
+                ${linkData.allow_selection ? `<button class="card-btn" data-id="${p.id}" id="selBtn-${p.id}" onclick="toggleSelect(event,${p.id})">✓ Seç</button>` : ''}
+            </div>`;
+
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.card-btn')) return;
+            openLightbox(i);
+        });
+        grid.appendChild(card);
+    });
+}
+
+function _thumbUrl(p) {
+    if (p.r2_key) return `/api/photos/${p.id}/thumb?size=md`;
+    if (p.local_path) return `/api/photos/${p.id}/thumb?size=md`;
+    return '/static/favicon.ico';
+}
+
+function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+function setLayout(cols) {
+    const grid = document.getElementById('photoGrid');
+    const min = cols === 2 ? '280px' : cols === 3 ? '220px' : '170px';
+    grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${min}, 1fr))`;
+    [2,3,4].forEach(c => document.getElementById(`btnGrid${c}`)?.classList.toggle('active', c === cols));
+}
+
+// ── Votes ─────────────────────────────────────────────────────────────────────
+async function _loadVotes() {
+    try {
+        const res = await fetch(`${API}/${linkId}/votes?fingerprint=${fingerprint}`);
+        if (!res.ok) return;
+        const list = await res.json();
+        list.forEach(v => {
+            votes[v.photo_id] = v;
+            _updateVoteUI(v.photo_id);
+        });
+    } catch (_) {}
+}
+
+async function toggleVote(e, photoId) {
+    e.stopPropagation();
+    try {
+        const res = await fetch(`${API}/${linkId}/photos/${photoId}/vote`, { method: 'POST' });
+        if (!res.ok) return;
+        const v = await res.json();
+        votes[photoId] = v;
+        _updateVoteUI(photoId);
+        // update lightbox if open
+        if (!document.getElementById('lightbox').classList.contains('hidden') && photos[lbIndex]?.id === photoId) {
+            _syncLbVoteBtn(photoId);
+        }
+    } catch (_) {}
+}
+
+function _updateVoteUI(photoId) {
+    const v = votes[photoId];
+    if (!v) return;
+    const vcEl = document.getElementById(`vc-${photoId}`);
+    if (vcEl) vcEl.textContent = v.vote_count;
+    const cardBtn = document.querySelector(`.card-btn[data-id="${photoId}"]`);
+    if (cardBtn) cardBtn.classList.toggle('voted', v.user_voted);
+}
+
+function _syncLbVoteBtn(photoId) {
+    const v = votes[photoId];
+    const btn = document.getElementById('lbVoteBtn');
+    if (!btn) return;
+    btn.textContent = v?.user_voted ? `♥ Beğenildi (${v.vote_count})` : `♥ Beğen (${v?.vote_count || 0})`;
+    btn.classList.toggle('voted', !!v?.user_voted);
+}
+
+// ── Selections ────────────────────────────────────────────────────────────────
+async function _loadSelections() {
+    try {
+        const res = await fetch(`${API}/${linkId}/selections`);
+        if (!res.ok) return;
+        const list = await res.json();
+        list.forEach(s => { if (s.selected) selections.add(s.photo_id); });
+        _updateSelectionUI();
+    } catch (_) {}
+}
+
+async function toggleSelect(e, photoId) {
+    if (e) e.stopPropagation();
+    const guestName = prompt('Adınız (boş bırakabilirsiniz):', '') ?? 'Ziyaretçi';
+    try {
+        const res = await fetch(`${API}/${linkId}/photos/${photoId}/select`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guest_name: guestName || 'Ziyaretçi' }),
+        });
+        if (!res.ok) return;
+        const s = await res.json();
+        if (s.selected) selections.add(photoId); else selections.delete(photoId);
+        _updateSelectionUI();
+        if (!document.getElementById('lightbox').classList.contains('hidden') && photos[lbIndex]?.id === photoId) {
+            _syncLbSelBtn(photoId);
+        }
+    } catch (_) {}
+}
+
+function _updateSelectionUI() {
+    const cnt = selections.size;
+    const cntEl = document.getElementById('selectionCount');
+    cntEl.textContent = `${cnt} seçili`;
+    cntEl.style.display = cnt > 0 ? '' : 'none';
+
+    photos.forEach((p, i) => {
+        const card = document.querySelector(`.photo-card[data-idx="${i}"]`);
+        if (!card) return;
+        card.classList.toggle('selected', selections.has(p.id));
+        const selBtn = document.getElementById(`selBtn-${p.id}`);
+        if (selBtn) selBtn.classList.toggle('sel-active', selections.has(p.id));
+    });
+}
+
+function _syncLbSelBtn(photoId) {
+    const btn = document.getElementById('lbSelBtn');
+    if (!btn) return;
+    const isSel = selections.has(photoId);
+    btn.textContent = isSel ? '✓ Seçildi' : '✓ Seç';
+    btn.classList.toggle('sel-active', isSel);
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function openLightbox(idx) {
+    lbIndex = idx;
+    document.getElementById('lightbox').classList.remove('hidden');
+    _renderLb();
+    document.addEventListener('keydown', _lbKey);
+}
+
+function closeLightbox() {
+    document.getElementById('lightbox').classList.add('hidden');
+    document.removeEventListener('keydown', _lbKey);
+}
+
+function _lbKey(e) {
+    if (e.key === 'ArrowLeft') lbNav(-1);
+    else if (e.key === 'ArrowRight') lbNav(1);
+    else if (e.key === 'Escape') closeLightbox();
+}
+
+function lbNav(dir) {
+    lbIndex = (lbIndex + dir + photos.length) % photos.length;
+    _renderLb();
+}
+
+function _renderLb() {
+    const p = photos[lbIndex];
+    if (!p) return;
+    document.getElementById('lbFilename').textContent = p.filename;
+    const img = document.getElementById('lbImg');
+    img.src = `/api/photos/${p.id}/thumb?size=lg`;
+    img.alt = p.filename;
+
+    // Vote button
+    _syncLbVoteBtn(p.id);
+
+    // Select button
+    const selBtn = document.getElementById('lbSelBtn');
+    if (linkData?.allow_selection) {
+        selBtn.style.display = '';
+        _syncLbSelBtn(p.id);
+    } else {
+        selBtn.style.display = 'none';
+    }
+
+    // Download button
+    const dlBtn = document.getElementById('lbDlBtn');
+    if (linkData?.allow_download) dlBtn.style.display = ''; else dlBtn.style.display = 'none';
+
+    // Info tab
+    document.getElementById('lbInfoContent').innerHTML = `
+        <div><b style="color:var(--text)">Dosya:</b> ${_esc(p.filename)}</div>
+        ${p.width && p.height ? `<div><b style="color:var(--text)">Boyut:</b> ${p.width}×${p.height}</div>` : ''}
+        ${p.taken_at ? `<div><b style="color:var(--text)">Tarih:</b> ${new Date(p.taken_at).toLocaleDateString('tr-TR')}</div>` : ''}
+        ${p.camera_model ? `<div><b style="color:var(--text)">Kamera:</b> ${_esc(p.camera_model)}</div>` : ''}
+        ${p.camera_make ? `<div><b style="color:var(--text)">Marka:</b> ${_esc(p.camera_make)}</div>` : ''}
+    `;
+
+    // Load comments for this photo
+    _loadComments(p.id);
+}
+
+function lbToggleVote() {
+    const p = photos[lbIndex];
+    if (p) toggleVote({ stopPropagation: () => {} }, p.id);
+}
+
+function lbToggleSelect() {
+    const p = photos[lbIndex];
+    if (p) toggleSelect(null, p.id);
+}
+
+async function lbDownload() {
+    const p = photos[lbIndex];
+    if (!p || !linkData?.allow_download) return;
+    try {
+        const res = await fetch(`/api/photos/${p.id}/presigned`);
+        const data = await res.json();
+        const a = document.createElement('a');
+        a.href = data.url || `/api/photos/${p.id}/thumb?size=lg`;
+        a.download = p.filename;
+        a.click();
+    } catch (_) {
+        const a = document.createElement('a');
+        a.href = `/api/photos/${p.id}/thumb?size=lg`;
+        a.download = p.filename;
+        a.click();
+    }
+}
+
+function lbSwitchTab(tab) {
+    document.querySelectorAll('.lb-tab').forEach((t, i) => t.classList.toggle('active', ['comments','info'][i] === tab));
+    document.getElementById('tabComments').classList.toggle('active', tab === 'comments');
+    document.getElementById('tabInfo').classList.toggle('active', tab === 'info');
+}
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+async function _loadComments(photoId) {
+    const listEl = document.getElementById('lbCommentList');
+    listEl.innerHTML = '<div class="comment-empty">Yükleniyor...</div>';
+    try {
+        const res = await fetch(`${API}/${linkId}/comments`);
+        if (!res.ok) { listEl.innerHTML = ''; return; }
+        const all = await res.json();
+        lbComments = photoId ? all.filter(c => c.photo_id === photoId) : all;
+        _renderComments();
+    } catch (_) { listEl.innerHTML = ''; }
+}
+
+function _renderComments() {
+    const listEl = document.getElementById('lbCommentList');
+    if (!lbComments.length) {
+        listEl.innerHTML = '<div class="comment-empty">Henüz yorum yok.</div>';
+        return;
+    }
+    listEl.innerHTML = lbComments.map(c => `
+        <div class="comment-item">
+            <div>
+                <span class="comment-author">${_esc(c.guest_name)}</span>
+                <span class="comment-time">${_relTime(c.created_at)}</span>
+            </div>
+            <div class="comment-body">${_esc(c.body)}</div>
+        </div>`).join('');
+}
+
+async function submitComment() {
+    const nameEl = document.getElementById('lbCommentName');
+    const bodyEl = document.getElementById('lbCommentInput');
+    const sendBtn = document.querySelector('#tabComments .comment-send');
+    const body = bodyEl.value.trim();
+    if (!body) return;
+    sendBtn.disabled = true;
+    try {
+        const p = photos[lbIndex];
+        const res = await fetch(`${API}/${linkId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                guest_name: nameEl.value.trim() || 'Ziyaretçi',
+                body,
+                photo_id: p?.id || null,
+            }),
+        });
+        if (res.ok) {
+            bodyEl.value = '';
+            _loadComments(p?.id);
+        }
+    } catch (_) {}
+    sendBtn.disabled = false;
+}
+
+function toggleCommentPanel() {
+    document.getElementById('gcPanel').classList.toggle('open');
+}
+
+async function submitGalleryComment() {
+    const name = document.getElementById('gcpName').value.trim() || 'Ziyaretçi';
+    const body = document.getElementById('gcpBody').value.trim();
+    if (!body) return;
+    try {
+        const res = await fetch(`${API}/${linkId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guest_name: name, body, photo_id: null }),
+        });
+        if (res.ok) {
+            document.getElementById('gcpBody').value = '';
+            document.getElementById('gcPanel').classList.remove('open');
+        }
+    } catch (_) {}
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function showError(title, msg) {
+    document.getElementById('loadingState').classList.add('hidden');
+    document.getElementById('pwModal').classList.add('hidden');
+    document.getElementById('errorState').classList.remove('hidden');
+    document.getElementById('errTitle').textContent = title;
+    document.getElementById('errMsg').textContent = msg;
+}
+
+function _relTime(iso) {
+    const diff = (Date.now() - new Date(iso)) / 1000;
+    if (diff < 60) return 'az önce';
+    if (diff < 3600) return `${Math.floor(diff/60)}dk önce`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}sa önce`;
+    return new Date(iso).toLocaleDateString('tr-TR');
+}
+
+function _fp() {
+    // Client-side pseudo-fingerprint (server also computes one from IP+UA)
+    const k = 'gw_fp';
+    let v = sessionStorage.getItem(k);
+    if (!v) { v = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem(k, v); }
+    return v;
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        if (!document.getElementById('lightbox').classList.contains('hidden')) { closeLightbox(); return; }
+        document.getElementById('gcPanel').classList.remove('open');
+    }
+});
+</script>
+</body>
+</html>

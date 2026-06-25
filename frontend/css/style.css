@@ -403,6 +403,78 @@ body::after {
     color: var(--text-primary);
 }
 
+/* ── User menu (auth) ──────────────────────────────────────────────────────── */
+.user-menu-wrap {
+    position: relative;
+}
+.user-avatar-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(0,210,255,0.1);
+    border: 1px solid rgba(0,210,255,0.4);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.user-avatar-btn:hover {
+    background: rgba(0,210,255,0.18);
+    box-shadow: 0 0 12px rgba(0,210,255,0.2);
+}
+.user-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    width: 200px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    padding: 10px 0;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(0,210,255,0.05);
+    z-index: 500;
+}
+.ud-email {
+    padding: 4px 14px 2px;
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ud-tier {
+    padding: 0 14px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+}
+.ud-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
+}
+.ud-logout {
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+}
+.ud-logout:hover {
+    color: var(--danger);
+    background: rgba(255,61,90,0.06);
+}
+
 .btn-primary {
     background: linear-gradient(135deg, var(--accent), rgba(0, 150, 200, 0.8));
     color: #000;
