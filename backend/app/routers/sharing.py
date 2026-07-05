@@ -6,11 +6,15 @@ from passlib.context import CryptContext
 import hashlib
 from ..database import get_db
 from ..auth import get_current_user
-from ..models import Profile, Gallery, SharingLink, Photo, GalleryComment, GalleryVote, PhotoSelection, PhotoMarking
+from ..models import (
+    Profile, Gallery, SharingLink, Photo, GalleryComment, GalleryVote,
+    PhotoSelection, PhotoMarking, MediaAnnotation,
+)
 from ..schemas import (
     SharingLinkCreate, SharingLinkOut, PhotoOut,
     CommentCreate, CommentOut, VoteOut, SelectionOut,
     MarkingCreate, MarkingOut,
+    AnnotationCreate, AnnotationOut,
 )
 
 router = APIRouter(prefix="/api/sharing", tags=["sharing"])
@@ -181,11 +185,60 @@ async def add_comment(
         photo_id=body.photo_id,
         guest_name=body.guest_name or "Ziyaretçi",
         body=body.body,
+        timestamp_ms=body.timestamp_ms,
     )
     db.add(comment)
     await db.commit()
     await db.refresh(comment)
     return CommentOut.model_validate(comment)
+
+
+# ── Media Annotations (Faz 8 — kare üzerine çizim) ────────────────────────────
+
+@router.get("/{link_id}/annotations", response_model=list[AnnotationOut])
+async def list_annotations(
+    link_id: str,
+    photo_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_valid_link(link_id, db)
+    q = select(MediaAnnotation).where(MediaAnnotation.link_id == link_id)
+    if photo_id:
+        q = q.where(MediaAnnotation.photo_id == photo_id)
+    result = await db.execute(q.order_by(MediaAnnotation.created_at.asc()))
+    return [AnnotationOut.model_validate(a) for a in result.scalars().all()]
+
+
+@router.post("/{link_id}/annotations", response_model=AnnotationOut, status_code=201)
+async def add_annotation(
+    link_id: str,
+    body: AnnotationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    link = await _get_valid_link(link_id, db)
+    # Fotoğraf bu linkin galerisine ait mi?
+    photo_res = await db.execute(
+        select(Photo).where(
+            Photo.id == body.photo_id,
+            Photo.gallery_id == link.gallery_id,
+            Photo.is_deleted == False,
+        )
+    )
+    if not photo_res.scalar_one_or_none():
+        raise HTTPException(404, "Fotoğraf bu galeride bulunamadı")
+
+    anno = MediaAnnotation(
+        link_id=link_id,
+        photo_id=body.photo_id,
+        guest_name=body.guest_name or "Ziyaretçi",
+        timestamp_ms=body.timestamp_ms,
+        drawing=body.drawing,
+        note=body.note,
+    )
+    db.add(anno)
+    await db.commit()
+    await db.refresh(anno)
+    return AnnotationOut.model_validate(anno)
 
 
 # ── Votes (likes) ──────────────────────────────────────────────────────────────

@@ -91,6 +91,7 @@ class PhotoOut(BaseModel):
     mime_type: Optional[str] = None
     width: Optional[int] = None
     height: Optional[int] = None
+    duration_ms: Optional[int] = None
     taken_at: Optional[datetime] = None
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
@@ -141,6 +142,14 @@ class CommentCreate(BaseModel):
     guest_name: Optional[str] = "Ziyaretçi"
     body: str
     photo_id: Optional[int] = None
+    timestamp_ms: Optional[int] = None
+
+    @field_validator("timestamp_ms")
+    @classmethod
+    def ts_positive(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and (v < 0 or v > 24 * 3600 * 1000):
+            raise ValueError("timestamp_ms 0 ile 24 saat arasında olmalı")
+        return v
 
     @field_validator("body")
     @classmethod
@@ -158,6 +167,50 @@ class CommentOut(BaseModel):
     photo_id: Optional[int] = None
     guest_name: str
     body: str
+    timestamp_ms: Optional[int] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Media Annotations (Faz 8 — kare üzerine çizim) ────────────────────────────
+
+class AnnotationCreate(BaseModel):
+    photo_id: int
+    guest_name: Optional[str] = "Ziyaretçi"
+    timestamp_ms: Optional[int] = None
+    drawing: dict
+    note: Optional[str] = None
+
+    @field_validator("drawing")
+    @classmethod
+    def drawing_valid(cls, v: dict) -> dict:
+        strokes = v.get("strokes")
+        if not isinstance(strokes, list) or not strokes:
+            raise ValueError("drawing.strokes boş olamaz")
+        if len(strokes) > 200:
+            raise ValueError("En fazla 200 çizgi olabilir")
+        total_points = sum(len(s.get("points", [])) for s in strokes if isinstance(s, dict))
+        if total_points > 20000:
+            raise ValueError("Çizim çok büyük")
+        return v
+
+    @field_validator("note")
+    @classmethod
+    def note_len(cls, v: Optional[str]) -> Optional[str]:
+        if v and len(v) > 1000:
+            raise ValueError("Not en fazla 1000 karakter olabilir")
+        return v
+
+
+class AnnotationOut(BaseModel):
+    id: int
+    link_id: uuid.UUID
+    photo_id: int
+    guest_name: str
+    timestamp_ms: Optional[int] = None
+    drawing: dict
+    note: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

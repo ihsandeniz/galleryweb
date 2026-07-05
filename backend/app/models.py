@@ -96,6 +96,9 @@ class Photo(Base):
     # CLIP semantic embedding (Faz 7) — vector(512) for clip-ViT-B-32
     embedding = Column(Vector(512), nullable=True)
 
+    # Video (Faz 8)
+    duration_ms = Column(Integer, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -131,9 +134,25 @@ class GalleryComment(Base):
     photo_id = Column(BigInteger, ForeignKey("public.photos.id", ondelete="CASCADE"), nullable=True)
     guest_name = Column(String(100), default="Ziyaretçi")
     body = Column(Text, nullable=False)
+    timestamp_ms = Column(Integer, nullable=True)  # video zaman konumu (Faz 8)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     sharing_link = relationship("SharingLink", back_populates="comments")
+
+
+class MediaAnnotation(Base):
+    """Faz 8 — misafir/müşteri kare üzerine çizim (video timestamp'li veya foto)."""
+    __tablename__ = "media_annotations"
+    __table_args__ = {"schema": "public"}
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    link_id = Column(UUID(as_uuid=True), ForeignKey("public.sharing_links.id", ondelete="CASCADE"), nullable=False)
+    photo_id = Column(BigInteger, ForeignKey("public.photos.id", ondelete="CASCADE"), nullable=False)
+    guest_name = Column(String(100), default="Ziyaretçi")
+    timestamp_ms = Column(Integer, nullable=True)
+    drawing = Column(JSONB, nullable=False)  # {strokes:[{color,width,points:[[x,y],..]}]} 0-1 normalize
+    note = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class GalleryVote(Base):

@@ -31,7 +31,76 @@ _IMAGE_MIME = {
     "image/heic", "image/avif", "image/tiff", "image/bmp",
 }
 
+_VIDEO_MIME = {"video/mp4", "video/webm", "video/quicktime"}
+
 _THUMB_SIZES = {"sm": 128, "md": 256, "lg": 1080}
+
+
+def _extract_video_meta(content: bytes, suffix: str) -> dict:
+    """Video metadata (ffprobe) + poster kare thumbnail'ları (ffmpeg). Executor'da koşar."""
+    import tempfile
+    import subprocess
+    import json as _json
+    import os
+
+    result = {"width": None, "height": None, "taken_at": None,
+              "camera_make": None, "camera_model": None,
+              "lens": None, "focal_length_mm": None,
+              "aperture": None, "shutter_speed": None, "iso": None,
+              "gps_lat": None, "gps_lon": None,
+              "duration_ms": None, "thumbs": {}}
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix or ".mp4", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height", "-show_entries", "format=duration",
+             "-of", "json", tmp_path],
+            capture_output=True, timeout=30,
+        )
+        info = _json.loads(probe.stdout or b"{}")
+        streams = info.get("streams") or []
+        if streams:
+            result["width"] = streams[0].get("width")
+            result["height"] = streams[0].get("height")
+        duration_s = None
+        try:
+            duration_s = float((info.get("format") or {}).get("duration") or 0) or None
+        except (TypeError, ValueError):
+            pass
+        if duration_s:
+            result["duration_ms"] = int(duration_s * 1000)
+
+        # Poster kare: 1. saniye (kısa videoda ortası)
+        seek = 1.0 if (duration_s or 0) > 2 else (duration_s or 0) / 2
+        frame = subprocess.run(
+            ["ffmpeg", "-v", "error", "-ss", f"{seek:.2f}", "-i", tmp_path,
+             "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "-"],
+            capture_output=True, timeout=30,
+        )
+        if frame.stdout:
+            from PIL import Image
+            img = Image.open(io.BytesIO(frame.stdout))
+            for name, max_px in _THUMB_SIZES.items():
+                thumb = img.copy()
+                thumb.thumbnail((max_px, max_px), Image.LANCZOS)
+                buf = io.BytesIO()
+                thumb.convert("RGB").save(buf, format="WEBP", quality=82)
+                result["thumbs"][name] = buf.getvalue()
+    except Exception as exc:
+        logger.warning(f"Video metadata çıkarılamadı: {exc}")
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    return result
 
 
 def _extract_exif_and_thumbs(content: bytes, mime: str) -> dict:
@@ -217,12 +286,13 @@ async def upload_photo(
             "Planı yükselt veya eski dosyaları sil."
         )
 
-    # EXIF + thumbnail extraction (non-blocking)
+    # EXIF/video metadata + thumbnail extraction (non-blocking)
     loop = asyncio.get_event_loop()
-    meta = await loop.run_in_executor(None, _extract_exif_and_thumbs, content, mime)
-
-    # Build storage keys
-    ext = Path(file.filename or "photo").suffix or ".jpg"
+    ext = Path(file.filename or "photo").suffix or (".mp4" if mime in _VIDEO_MIME else ".jpg")
+    if mime in _VIDEO_MIME:
+        meta = await loop.run_in_executor(None, _extract_video_meta, content, ext)
+    else:
+        meta = await loop.run_in_executor(None, _extract_exif_and_thumbs, content, mime)
     base_key = f"{current_user.id}/{uuid.uuid4()}"
     file_key = f"{base_key}{ext}"
 
@@ -260,6 +330,7 @@ async def upload_photo(
         iso=meta["iso"],
         gps_lat=meta["gps_lat"],
         gps_lon=meta["gps_lon"],
+        duration_ms=meta.get("duration_ms"),
     )
     db.add(photo)
 
@@ -294,14 +365,48 @@ async def get_photo(
 @router.get("/{photo_id}/file")
 async def serve_photo(
     photo_id: int,
-    current_user: Profile = Depends(get_current_user),
+    share_token: str | None = None,
+    token: str | None = None,
+    current_user: Profile | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
-    """Serve photo: R2 presigned redirect or local FileResponse."""
-    result = await db.execute(
-        select(Photo).where(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.is_deleted == False)
-    )
-    photo = result.scalar_one_or_none()
+    """Serve photo/video: R2 presigned redirect or local FileResponse (Range destekli).
+
+    Auth: JWT (header veya ?token=) VEYA share_token (public share sayfası — video oynatma).
+    """
+    # token in URL fallback — <video>/<img> etiketleri Authorization header gönderemez
+    if token and not current_user:
+        try:
+            from ..auth import _verify_token
+            import uuid as _uuid
+            payload = await _verify_token(token)
+            uid = _uuid.UUID(payload["sub"])
+            r = await db.execute(select(Profile).where(Profile.id == uid))
+            current_user = r.scalar_one_or_none()
+        except Exception:
+            pass
+
+    if share_token:
+        link_res = await db.execute(select(SharingLink).where(SharingLink.id == share_token))
+        link = link_res.scalar_one_or_none()
+        if not link:
+            raise HTTPException(403, "Geçersiz paylaşım linki")
+        result = await db.execute(
+            select(Photo).where(
+                Photo.id == photo_id,
+                Photo.gallery_id == link.gallery_id,
+                Photo.is_deleted == False,
+            )
+        )
+        photo = result.scalar_one_or_none()
+    elif current_user:
+        result = await db.execute(
+            select(Photo).where(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.is_deleted == False)
+        )
+        photo = result.scalar_one_or_none()
+    else:
+        raise HTTPException(401, "Kimlik doğrulama gerekli")
+
     if not photo:
         raise HTTPException(404, "Fotoğraf bulunamadı")
 

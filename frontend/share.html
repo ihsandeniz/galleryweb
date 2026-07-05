@@ -22,6 +22,7 @@
         }
         html { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
         body { min-height: 100vh; }
+        .hidden { display: none !important; }
 
         /* ── Scan-line overlay ────────────────────────────────────────── */
         body::before {
@@ -206,10 +207,83 @@
             flex: 1; display: flex; align-items: center; justify-content: center;
             padding: 20px; position: relative;
         }
-        .lb-img-area img {
-            max-width: 100%; max-height: 100%; object-fit: contain;
-            border-radius: 4px;
+        .lb-media-wrap {
+            position: relative;
+            max-width: 100%; max-height: 100%;
+            display: flex; align-items: center; justify-content: center;
         }
+        .lb-media-wrap img, .lb-media-wrap video {
+            max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain;
+            border-radius: 4px; display: block;
+        }
+        .lb-media-wrap .hidden { display: none; }
+
+        /* ── Video badge (grid kartı) ────────────────────────────────── */
+        .video-badge {
+            position: absolute; top: 8px; left: 8px;
+            background: rgba(6,8,12,.8); border: 1px solid rgba(0,210,255,.4);
+            color: var(--accent); font-size: .68rem; letter-spacing: .05em;
+            padding: 3px 8px; border-radius: 3px; pointer-events: none;
+        }
+
+        /* ── Annotation canvas & toolbar ─────────────────────────────── */
+        #annoCanvas {
+            position: absolute; z-index: 5; border-radius: 4px;
+            pointer-events: none; touch-action: none;
+        }
+        #annoCanvas.drawing { pointer-events: auto; cursor: crosshair; }
+        .anno-bar {
+            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 6; display: none; align-items: center; gap: 8px;
+            background: rgba(13,17,23,.95); border: 1px solid var(--accent);
+            border-radius: 6px; padding: 8px 12px;
+            box-shadow: 0 0 20px rgba(0,210,255,.25);
+        }
+        .anno-bar.open { display: flex; }
+        .anno-color {
+            width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+            border: 2px solid transparent; padding: 0;
+        }
+        .anno-color.active { border-color: #fff; }
+        .anno-btn {
+            background: var(--bg3); border: 1px solid var(--border);
+            color: var(--text); font-family: var(--font); font-size: .75rem;
+            padding: 5px 10px; border-radius: 4px; cursor: pointer;
+            transition: all .15s; white-space: nowrap;
+        }
+        .anno-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .anno-btn.save { background: var(--accent); color: #000; font-weight: 700; border: none; }
+        .anno-note {
+            background: var(--bg3); border: 1px solid var(--border);
+            color: var(--text); font-family: var(--font); font-size: .75rem;
+            padding: 5px 8px; border-radius: 4px; outline: none; width: 150px;
+        }
+        .anno-note:focus { border-color: var(--accent); }
+
+        /* ── Timestamp yorum chip'i ──────────────────────────────────── */
+        .ts-chip {
+            display: flex; align-items: center; gap: 6px;
+            font-size: .72rem; color: var(--accent); cursor: pointer;
+            border: 1px dashed rgba(0,210,255,.4); border-radius: 4px;
+            padding: 5px 8px; user-select: none;
+        }
+        .ts-chip.hidden { display: none; }
+        .ts-chip input { accent-color: var(--accent); }
+        .comment-ts {
+            display: inline-block; background: rgba(0,210,255,.12);
+            border: 1px solid rgba(0,210,255,.4); color: var(--accent);
+            font-size: .68rem; padding: 1px 6px; border-radius: 3px;
+            cursor: pointer; margin-right: 6px;
+        }
+        .comment-ts:hover { background: rgba(0,210,255,.25); }
+        .anno-view-hint {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 6; display: none;
+            background: rgba(13,17,23,.9); border: 1px solid var(--accent);
+            color: var(--accent); font-size: .72rem; border-radius: 4px;
+            padding: 4px 10px; cursor: pointer;
+        }
+        .anno-view-hint.open { display: block; }
         .lb-nav-btn {
             position: absolute; top: 50%; transform: translateY(-50%);
             background: rgba(13,17,23,.8); border: 1px solid var(--border);
@@ -377,6 +451,7 @@
         <button class="lb-close" onclick="closeLightbox()">✕</button>
         <div class="lb-filename" id="lbFilename"></div>
         <div class="lb-actions">
+            <button class="lb-btn" id="lbAnnoBtn" onclick="startAnnotation()">✏ Çiz</button>
             <button class="lb-btn" id="lbVoteBtn" onclick="lbToggleVote()">♥ Beğen</button>
             <button class="lb-btn" id="lbSelBtn" onclick="lbToggleSelect()" style="display:none">✓ Seç</button>
             <button class="lb-btn" id="lbDlBtn" onclick="lbDownload()" style="display:none">⬇ İndir</button>
@@ -385,7 +460,22 @@
     <div class="lb-body">
         <div class="lb-img-area">
             <button class="lb-nav-btn lb-nav-prev" onclick="lbNav(-1)">‹</button>
-            <img id="lbImg" src="" alt="">
+            <div class="lb-media-wrap" id="lbMediaWrap">
+                <img id="lbImg" src="" alt="">
+                <video id="lbVideo" class="hidden" controls playsinline preload="metadata"></video>
+                <canvas id="annoCanvas"></canvas>
+                <div class="anno-view-hint" id="annoViewHint" onclick="clearAnnoView()">✏ çizim gösteriliyor — gizlemek için tıkla</div>
+                <div class="anno-bar" id="annoBar">
+                    <button class="anno-color active" data-color="#00d2ff" style="background:#00d2ff" onclick="setAnnoColor(this)"></button>
+                    <button class="anno-color" data-color="#f85149" style="background:#f85149" onclick="setAnnoColor(this)"></button>
+                    <button class="anno-color" data-color="#3fb950" style="background:#3fb950" onclick="setAnnoColor(this)"></button>
+                    <button class="anno-color" data-color="#f0c437" style="background:#f0c437" onclick="setAnnoColor(this)"></button>
+                    <button class="anno-btn" onclick="undoStroke()">↩ Geri</button>
+                    <input type="text" class="anno-note" id="annoNote" placeholder="Not (opsiyonel)" maxlength="200">
+                    <button class="anno-btn save" onclick="saveAnnotation()">Kaydet</button>
+                    <button class="anno-btn" onclick="cancelAnnotation()">İptal</button>
+                </div>
+            </div>
             <button class="lb-nav-btn lb-nav-next" onclick="lbNav(1)">›</button>
         </div>
         <div class="lb-sidebar" id="lbSidebar">
@@ -397,6 +487,10 @@
                 <div class="comment-list" id="lbCommentList"></div>
                 <div class="comment-form">
                     <input type="text" class="comment-name" id="lbCommentName" placeholder="Adınız (opsiyonel)" maxlength="80">
+                    <label class="ts-chip hidden" id="tsChip">
+                        <input type="checkbox" id="tsChipCb" checked>
+                        <span>⏱ <span id="tsChipTime">0:00</span> anına sabitle</span>
+                    </label>
                     <textarea class="comment-input" id="lbCommentInput" placeholder="Yorum yazın..." maxlength="2000" rows="3"></textarea>
                     <button class="comment-send" onclick="submitComment()">Gönder</button>
                 </div>
@@ -429,7 +523,15 @@ let votes = {};        // photoId → { vote_count, user_voted }
 let selections = new Set(); // selected photo IDs
 let lbIndex = 0;
 let lbComments = [];
+let lbAnnos = [];      // aktif fotoğrafın çizim annotation'ları
 let fingerprint = _fp();
+
+// Annotation (çizim) durumu
+let annoMode = false;      // çizim modu açık mı
+let annoStrokes = [];      // çizilen stroke'lar (0-1 normalize)
+let annoColor = '#00d2ff';
+let annoDrawing = false;   // pointer basılı mı
+let annoViewing = null;    // görüntülenen kayıtlı annotation
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (function init() {
@@ -529,9 +631,12 @@ function _renderGallery() {
         card.dataset.idx = i;
 
         const imgSrc = _thumbUrl(p);
+        const videoBadge = _isVideo(p)
+            ? `<div class="video-badge">▶ ${_fmtDur(p.duration_ms)}</div>` : '';
         card.innerHTML = `
             <img src="${imgSrc}" alt="${_esc(p.filename)}" loading="lazy" class="loading"
                  onload="this.classList.remove('loading')" onerror="this.src='/static/favicon.ico'">
+            ${videoBadge}
             <div class="select-check">✓</div>
             <div class="card-actions">
                 <button class="card-btn" data-id="${p.id}" onclick="toggleVote(event,${p.id})">♥ <span class="vote-count" id="vc-${p.id}">0</span></button>
@@ -546,10 +651,22 @@ function _renderGallery() {
     });
 }
 
-function _thumbUrl(p) {
-    if (p.r2_key) return `/api/photos/${p.id}/thumb?size=md`;
-    if (p.local_path) return `/api/photos/${p.id}/thumb?size=md`;
-    return '/static/favicon.ico';
+function _thumbUrl(p, size = 'md') {
+    return `/api/photos/${p.id}/thumb?size=${size}&share_token=${encodeURIComponent(linkId)}`;
+}
+
+function _fileUrl(p) {
+    return `/api/photos/${p.id}/file?share_token=${encodeURIComponent(linkId)}`;
+}
+
+function _isVideo(p) {
+    return (p.mime_type || '').startsWith('video/');
+}
+
+function _fmtDur(ms) {
+    if (!ms) return 'video';
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function _esc(s) {
@@ -671,17 +788,25 @@ function openLightbox(idx) {
 }
 
 function closeLightbox() {
+    cancelAnnotation();
+    clearAnnoView();
+    const video = document.getElementById('lbVideo');
+    video.pause();
+    video.removeAttribute('src');
     document.getElementById('lightbox').classList.add('hidden');
     document.removeEventListener('keydown', _lbKey);
 }
 
 function _lbKey(e) {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;  // yazarken gezinme
     if (e.key === 'ArrowLeft') lbNav(-1);
     else if (e.key === 'ArrowRight') lbNav(1);
-    else if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'Escape') { annoMode ? cancelAnnotation() : closeLightbox(); }
 }
 
 function lbNav(dir) {
+    if (annoMode) return;  // çizim modunda gezinme kilitli
     lbIndex = (lbIndex + dir + photos.length) % photos.length;
     _renderLb();
 }
@@ -689,10 +814,34 @@ function lbNav(dir) {
 function _renderLb() {
     const p = photos[lbIndex];
     if (!p) return;
+    cancelAnnotation();
+    clearAnnoView();
     document.getElementById('lbFilename').textContent = p.filename;
+
     const img = document.getElementById('lbImg');
-    img.src = `/api/photos/${p.id}/thumb?size=lg`;
-    img.alt = p.filename;
+    const video = document.getElementById('lbVideo');
+    const tsChip = document.getElementById('tsChip');
+
+    if (_isVideo(p)) {
+        img.classList.add('hidden');
+        img.removeAttribute('src');
+        video.classList.remove('hidden');
+        video.poster = _thumbUrl(p, 'lg');
+        video.src = _fileUrl(p);
+        tsChip.classList.remove('hidden');
+        video.ontimeupdate = () => {
+            document.getElementById('tsChipTime').textContent = _fmtDur(video.currentTime * 1000);
+        };
+    } else {
+        video.pause();
+        video.removeAttribute('src');
+        video.ontimeupdate = null;
+        video.classList.add('hidden');
+        img.classList.remove('hidden');
+        img.src = _thumbUrl(p, 'lg');
+        img.alt = p.filename;
+        tsChip.classList.add('hidden');
+    }
 
     // Vote button
     _syncLbVoteBtn(p.id);
@@ -714,13 +863,15 @@ function _renderLb() {
     document.getElementById('lbInfoContent').innerHTML = `
         <div><b style="color:var(--text)">Dosya:</b> ${_esc(p.filename)}</div>
         ${p.width && p.height ? `<div><b style="color:var(--text)">Boyut:</b> ${p.width}×${p.height}</div>` : ''}
+        ${p.duration_ms ? `<div><b style="color:var(--text)">Süre:</b> ${_fmtDur(p.duration_ms)}</div>` : ''}
         ${p.taken_at ? `<div><b style="color:var(--text)">Tarih:</b> ${new Date(p.taken_at).toLocaleDateString('tr-TR')}</div>` : ''}
         ${p.camera_model ? `<div><b style="color:var(--text)">Kamera:</b> ${_esc(p.camera_model)}</div>` : ''}
         ${p.camera_make ? `<div><b style="color:var(--text)">Marka:</b> ${_esc(p.camera_make)}</div>` : ''}
     `;
 
-    // Load comments for this photo
+    // Load comments + annotations for this photo
     _loadComments(p.id);
+    _loadAnnotations(p.id);
 }
 
 function lbToggleVote() {
@@ -733,22 +884,13 @@ function lbToggleSelect() {
     if (p) toggleSelect(null, p.id);
 }
 
-async function lbDownload() {
+function lbDownload() {
     const p = photos[lbIndex];
     if (!p || !linkData?.allow_download) return;
-    try {
-        const res = await fetch(`/api/photos/${p.id}/presigned`);
-        const data = await res.json();
-        const a = document.createElement('a');
-        a.href = data.url || `/api/photos/${p.id}/thumb?size=lg`;
-        a.download = p.filename;
-        a.click();
-    } catch (_) {
-        const a = document.createElement('a');
-        a.href = `/api/photos/${p.id}/thumb?size=lg`;
-        a.download = p.filename;
-        a.click();
-    }
+    const a = document.createElement('a');
+    a.href = _fileUrl(p);
+    a.download = p.filename;
+    a.click();
 }
 
 function lbSwitchTab(tab) {
@@ -782,8 +924,30 @@ function _renderComments() {
                 <span class="comment-author">${_esc(c.guest_name)}</span>
                 <span class="comment-time">${_relTime(c.created_at)}</span>
             </div>
-            <div class="comment-body">${_esc(c.body)}</div>
+            <div class="comment-body">${c.timestamp_ms != null
+                ? `<span class="comment-ts" onclick="seekTo(${c.timestamp_ms})">⏱ ${_fmtDur(c.timestamp_ms)}</span>` : ''}${_esc(c.body)}</div>
         </div>`).join('');
+
+    // Çizim annotation'ları yorum listesinin altına
+    if (lbAnnos.length) {
+        listEl.innerHTML += lbAnnos.map(a => `
+        <div class="comment-item">
+            <div>
+                <span class="comment-author">✏ ${_esc(a.guest_name)}</span>
+                <span class="comment-time">${_relTime(a.created_at)}</span>
+            </div>
+            <div class="comment-body">
+                <span class="comment-ts" onclick="viewAnnotation(${a.id})">${a.timestamp_ms != null ? '⏱ ' + _fmtDur(a.timestamp_ms) + ' · ' : ''}çizimi göster</span>${_esc(a.note || '')}
+            </div>
+        </div>`).join('');
+    }
+}
+
+function seekTo(ms) {
+    const video = document.getElementById('lbVideo');
+    if (video.classList.contains('hidden')) return;
+    video.currentTime = ms / 1000;
+    video.pause();
 }
 
 async function submitComment() {
@@ -795,6 +959,11 @@ async function submitComment() {
     sendBtn.disabled = true;
     try {
         const p = photos[lbIndex];
+        const video = document.getElementById('lbVideo');
+        let timestamp_ms = null;
+        if (p && _isVideo(p) && document.getElementById('tsChipCb').checked) {
+            timestamp_ms = Math.round(video.currentTime * 1000);
+        }
         const res = await fetch(`${API}/${linkId}/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -802,6 +971,7 @@ async function submitComment() {
                 guest_name: nameEl.value.trim() || 'Ziyaretçi',
                 body,
                 photo_id: p?.id || null,
+                timestamp_ms,
             }),
         });
         if (res.ok) {
@@ -832,6 +1002,170 @@ async function submitGalleryComment() {
         }
     } catch (_) {}
 }
+
+// ── Annotations (Faz 8 — kare üzerine çizim) ──────────────────────────────────
+async function _loadAnnotations(photoId) {
+    lbAnnos = [];
+    try {
+        const res = await fetch(`${API}/${linkId}/annotations?photo_id=${photoId}`);
+        if (res.ok) lbAnnos = await res.json();
+    } catch (_) {}
+    _renderComments();
+}
+
+function _mediaEl() {
+    const video = document.getElementById('lbVideo');
+    return video.classList.contains('hidden') ? document.getElementById('lbImg') : video;
+}
+
+function _sizeAnnoCanvas() {
+    const canvas = document.getElementById('annoCanvas');
+    const media = _mediaEl();
+    const wrap = document.getElementById('lbMediaWrap');
+    const mr = media.getBoundingClientRect();
+    const wr = wrap.getBoundingClientRect();
+    canvas.style.left = (mr.left - wr.left) + 'px';
+    canvas.style.top = (mr.top - wr.top) + 'px';
+    canvas.style.width = mr.width + 'px';
+    canvas.style.height = mr.height + 'px';
+    canvas.width = Math.max(1, Math.round(mr.width * devicePixelRatio));
+    canvas.height = Math.max(1, Math.round(mr.height * devicePixelRatio));
+}
+
+function _drawStrokes(strokes) {
+    const canvas = document.getElementById('annoCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const s of strokes) {
+        const pts = s.points || [];
+        if (pts.length < 2) continue;
+        ctx.strokeStyle = s.color || '#00d2ff';
+        ctx.lineWidth = (s.width || 0.004) * canvas.width;
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0] * canvas.width, pts[0][1] * canvas.height);
+        for (let i = 1; i < pts.length; i++) {
+            ctx.lineTo(pts[i][0] * canvas.width, pts[i][1] * canvas.height);
+        }
+        ctx.stroke();
+    }
+}
+
+function startAnnotation() {
+    if (annoMode) { cancelAnnotation(); return; }
+    clearAnnoView();
+    annoMode = true;
+    annoStrokes = [];
+    const video = document.getElementById('lbVideo');
+    if (!video.classList.contains('hidden')) video.pause();
+    _sizeAnnoCanvas();
+    document.getElementById('annoCanvas').classList.add('drawing');
+    document.getElementById('annoBar').classList.add('open');
+    document.getElementById('lbAnnoBtn').textContent = '✏ Çizim modunda';
+}
+
+function cancelAnnotation() {
+    annoMode = false;
+    annoStrokes = [];
+    annoDrawing = false;
+    const canvas = document.getElementById('annoCanvas');
+    canvas.classList.remove('drawing');
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('annoBar').classList.remove('open');
+    document.getElementById('annoNote').value = '';
+    document.getElementById('lbAnnoBtn').textContent = '✏ Çiz';
+}
+
+function setAnnoColor(btn) {
+    annoColor = btn.dataset.color;
+    document.querySelectorAll('.anno-color').forEach(b => b.classList.toggle('active', b === btn));
+}
+
+function undoStroke() {
+    annoStrokes.pop();
+    _drawStrokes(annoStrokes);
+}
+
+async function saveAnnotation() {
+    if (!annoStrokes.length) { cancelAnnotation(); return; }
+    const p = photos[lbIndex];
+    if (!p) return;
+    const video = document.getElementById('lbVideo');
+    const timestamp_ms = _isVideo(p) ? Math.round(video.currentTime * 1000) : null;
+    const guestName = document.getElementById('lbCommentName').value.trim() || 'Ziyaretçi';
+    try {
+        const res = await fetch(`${API}/${linkId}/annotations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                photo_id: p.id,
+                guest_name: guestName,
+                timestamp_ms,
+                drawing: { strokes: annoStrokes },
+                note: document.getElementById('annoNote').value.trim() || null,
+            }),
+        });
+        if (res.ok) {
+            cancelAnnotation();
+            _loadAnnotations(p.id);
+        }
+    } catch (_) {}
+}
+
+function viewAnnotation(id) {
+    const a = lbAnnos.find(x => x.id === id);
+    if (!a) return;
+    if (a.timestamp_ms != null) seekTo(a.timestamp_ms);
+    cancelAnnotation();
+    annoViewing = a;
+    _sizeAnnoCanvas();
+    _drawStrokes((a.drawing || {}).strokes || []);
+    document.getElementById('annoViewHint').classList.add('open');
+}
+
+function clearAnnoView() {
+    annoViewing = null;
+    const canvas = document.getElementById('annoCanvas');
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('annoViewHint').classList.remove('open');
+}
+
+// Pointer olayları — çizim
+(function _bindAnnoCanvas() {
+    const canvas = document.getElementById('annoCanvas');
+
+    function _pt(e) {
+        const r = canvas.getBoundingClientRect();
+        return [
+            Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+            Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+        ];
+    }
+
+    canvas.addEventListener('pointerdown', e => {
+        if (!annoMode) return;
+        e.preventDefault();
+        canvas.setPointerCapture(e.pointerId);
+        annoDrawing = true;
+        annoStrokes.push({ color: annoColor, width: 0.004, points: [_pt(e)] });
+    });
+    canvas.addEventListener('pointermove', e => {
+        if (!annoMode || !annoDrawing) return;
+        e.preventDefault();
+        annoStrokes[annoStrokes.length - 1].points.push(_pt(e));
+        _drawStrokes(annoStrokes);
+    });
+    canvas.addEventListener('pointerup', () => { annoDrawing = false; });
+    canvas.addEventListener('pointercancel', () => { annoDrawing = false; });
+
+    window.addEventListener('resize', () => {
+        if (document.getElementById('lightbox').classList.contains('hidden')) return;
+        _sizeAnnoCanvas();
+        if (annoMode) _drawStrokes(annoStrokes);
+        else if (annoViewing) _drawStrokes((annoViewing.drawing || {}).strokes || []);
+    });
+})();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function showError(title, msg) {
