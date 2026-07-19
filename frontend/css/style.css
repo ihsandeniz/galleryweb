@@ -595,7 +595,36 @@ body::after {
     transition: opacity 0.3s;
 }
 
-.gallery-item img.loading { opacity: 0.4; }
+/* Yükleme iskeleti (skeleton): thumbnail üretilene kadar boş/siyah kutu yerine
+   animasyonlu shimmer placeholder göster. Görsel yüklenince .loading kalkar. */
+.gallery-item img.loading {
+    opacity: 1;
+    min-height: 160px;
+    background: var(--bg-elevated) linear-gradient(
+        100deg,
+        transparent 20%,
+        rgba(255, 255, 255, 0.06) 45%,
+        rgba(255, 255, 255, 0.06) 55%,
+        transparent 80%
+    );
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+    0%   { background-position: 160% 0; }
+    100% { background-position: -60% 0; }
+}
+
+/* Sabit-boyutlu görünümler kendi yüksekliğini verir — iskelet min-height'ini ezme */
+.gallery-grid[data-view="minimal"] .gallery-item img.loading,
+.gallery-grid[data-view="compact"] .gallery-item img.loading,
+.gallery-grid[data-view="extended"] .gallery-item img.loading { min-height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    .gallery-item img.loading { animation: none; }
+}
 
 /* View Modes */
 .gallery-grid[data-view="minimal"] {
@@ -1606,6 +1635,25 @@ body::after {
 .empty-state p {
     font-family: var(--font-mono);
     font-size: 13px;
+}
+
+.empty-state .empty-icon {
+    font-size: 44px;
+    line-height: 1;
+    opacity: 0.55;
+    margin-bottom: 4px;
+}
+
+.empty-state .empty-title {
+    font-size: 15px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.empty-state .empty-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    opacity: 0.8;
 }
 
 /* ========== Light Theme Overrides ========== */

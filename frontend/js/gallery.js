@@ -1756,7 +1756,10 @@ function renderGallery() {
 
     if (state.images.length === 0) {
         elements.emptyState.classList.remove('hidden');
-        elements.emptyState.innerHTML = '<p>🔍 Hiç resim bulunamadı</p>';
+        elements.emptyState.innerHTML =
+            '<div class="empty-icon">🖼️</div>' +
+            '<p class="empty-title">Burada gösterilecek resim yok</p>' +
+            '<p class="empty-sub">Farklı bir klasör/albüm seçin ya da filtreyi temizleyin.</p>';
         return;
     }
 
