@@ -136,7 +136,22 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' ws: wss:; font-src 'self' data:"
+    # CSP, uygulamanın kendi CDN bağımlılıklarına izin vermeli; aksi halde kendi
+    # kaynaklarını bloklar (Google Fonts, Leaflet harita, Supabase cloud-auth).
+    #   fonts.googleapis/gstatic → Inter + JetBrains Mono (@import style.css)
+    #   unpkg                    → Leaflet CSS/JS (harita)
+    #   cdn.jsdelivr             → Supabase JS (bulut modu)
+    #   *.tile.openstreetmap.org → harita döşemeleri
+    #   *.supabase.co            → bulut API + realtime websocket
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
+        "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
+        "media-src 'self' blob: data:; "
+        "connect-src 'self' ws: wss: https://*.supabase.co; "
+        "font-src 'self' data: https://fonts.gstatic.com"
+    )
     return response
 
 
