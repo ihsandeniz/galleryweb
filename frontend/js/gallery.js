@@ -542,18 +542,33 @@ async function init() {
     });
     elements.wmExportBtn.addEventListener('click', executeWatermarkExport);
 
-    // Faz 5.1 — Edit mode
+    // Faz 5.1 + Faz 9 — Edit mode (foto stüdyosu)
     document.getElementById('editModeBtn').addEventListener('click', toggleEditToolbar);
     document.getElementById('closeEditToolbarBtn').addEventListener('click', closeEditToolbar);
     document.getElementById('editRotateCCW').addEventListener('click', () => applyEdit('rotate', { degrees: -90 }));
     document.getElementById('editRotateCW').addEventListener('click', () => applyEdit('rotate', { degrees: 90 }));
     document.getElementById('editRotate180').addEventListener('click', () => applyEdit('rotate', { degrees: 180 }));
+    document.getElementById('editFlipH').addEventListener('click', () => applyEdit('flip', { direction: 'horizontal' }));
+    document.getElementById('editFlipV').addEventListener('click', () => applyEdit('flip', { direction: 'vertical' }));
     document.getElementById('editCropBtn').addEventListener('click', startCropMode);
     document.getElementById('editAdjustBtn').addEventListener('click', openAdjustPanel);
+    document.getElementById('editFilterBtn').addEventListener('click', openFilterPanel);
     document.getElementById('editRevertBtn').addEventListener('click', revertEdit);
     document.getElementById('adjustApplyBtn').addEventListener('click', applyAdjust);
-    document.getElementById('adjustCancelBtn').addEventListener('click', () => {
-        document.getElementById('adjustPanel').classList.add('hidden');
+    document.getElementById('adjustResetBtn').addEventListener('click', resetAdjustSliders);
+    document.getElementById('adjustCancelBtn').addEventListener('click', closeAdjustPanel);
+    document.getElementById('filterCancelBtn').addEventListener('click', closeFilterPanel);
+    document.querySelectorAll('.filter-preset').forEach(btn => {
+        btn.addEventListener('click', () => applyFilterPreset(btn.dataset.preset));
+    });
+
+    // Faz 9 — Video edit (trim)
+    document.getElementById('closeVideoEditBtn').addEventListener('click', closeVideoEditToolbar);
+    document.getElementById('videoTrimBtn').addEventListener('click', openTrimPanel);
+    document.getElementById('videoRevertBtn').addEventListener('click', revertVideoEdit);
+    document.getElementById('trimApplyBtn').addEventListener('click', applyTrim);
+    document.getElementById('trimCancelBtn').addEventListener('click', () => {
+        document.getElementById('trimPanel').classList.add('hidden');
     });
 
     elements.emptyState.classList.remove('hidden');
@@ -2034,25 +2049,39 @@ function closeLightbox() {
 let _cropState = null; // { startX, startY, endX, endY, drawing }
 
 function toggleEditToolbar() {
-    const toolbar = document.getElementById('editToolbar');
-    const isOpen = !toolbar.classList.contains('hidden');
+    const photoBar = document.getElementById('editToolbar');
+    const videoBar = document.getElementById('videoEditToolbar');
+    const isOpen = !photoBar.classList.contains('hidden') || !videoBar.classList.contains('hidden');
     if (isOpen) {
         closeEditToolbar();
-    } else {
-        const imagePath = state.images[state.currentImageIndex];
-        const isVideo = /\.(mp4|webm|mov)$/i.test(imagePath || '');
-        if (isVideo) { showToast('Videolar düzenlenemez', 'warning'); return; }
-        toolbar.classList.remove('hidden');
+        closeVideoEditToolbar();
+        return;
+    }
+    const imagePath = state.images[state.currentImageIndex];
+    const isVideo = /\.(mp4|webm|mov|mkv|m4v)$/i.test(imagePath || '');
+    if (isVideo) {
+        videoBar.classList.remove('hidden');
         document.getElementById('editModeBtn').classList.add('active');
-        // Check if backup exists to enable/disable revert btn
+        checkVideoBackup(imagePath);
+    } else {
+        photoBar.classList.remove('hidden');
+        document.getElementById('editModeBtn').classList.add('active');
         checkEditBackup(imagePath);
     }
 }
 
 function closeEditToolbar() {
     document.getElementById('editToolbar').classList.add('hidden');
-    document.getElementById('adjustPanel').classList.add('hidden');
+    closeAdjustPanel();
+    closeFilterPanel();
     cancelCropMode();
+    const btn = document.getElementById('editModeBtn');
+    if (btn) btn.classList.remove('active');
+}
+
+function closeVideoEditToolbar() {
+    document.getElementById('videoEditToolbar').classList.add('hidden');
+    document.getElementById('trimPanel').classList.add('hidden');
     const btn = document.getElementById('editModeBtn');
     if (btn) btn.classList.remove('active');
 }
@@ -2081,7 +2110,8 @@ async function applyEdit(operation, params) {
             return;
         }
         showToast('Düzenleme uygulandı', 'success', 2000);
-        // Reload image with cache-bust
+        // Reload image with cache-bust; canlı önizleme filtresini temizle
+        if (typeof _clearPreview === 'function') _clearPreview();
         elements.lightboxImage.src = `${API_BASE}/image/${encodeURIComponent(imagePath)}?t=${Date.now()}`;
         // Enable revert button
         document.getElementById('editRevertBtn').disabled = false;
@@ -2111,29 +2141,189 @@ async function revertEdit() {
     }
 }
 
-// ── Adjust (brightness / contrast) ──
+// ── Video edit (Faz 9 — trim) ──
+
+async function checkVideoBackup(path) {
+    try {
+        const res = await fetch(`${API_BASE}/edit/${encodeURIComponent(path)}/has-backup`);
+        const d = await res.json();
+        const btn = document.getElementById('videoRevertBtn');
+        btn.disabled = !d.has_backup;
+        btn.style.opacity = d.has_backup ? '1' : '0.4';
+    } catch {}
+}
+
+function openTrimPanel() {
+    const video = elements.lightboxVideo;
+    const dur = video && isFinite(video.duration) ? video.duration : 0;
+    if (!dur) { showToast('Video süresi okunamadı — önce oynatın', 'warning'); return; }
+    const panel = document.getElementById('trimPanel');
+    const startS = document.getElementById('trimStartSlider');
+    const endS = document.getElementById('trimEndSlider');
+    startS.value = 0;
+    endS.value = 1000;
+    const range = document.getElementById('trimRange');
+
+    const updateLabels = () => {
+        let s = parseInt(startS.value), e = parseInt(endS.value);
+        if (s >= e) { if (document.activeElement === startS) s = e - 1; else e = s + 1; startS.value = s; endS.value = e; }
+        const startSec = (s / 1000) * dur;
+        const endSec = (e / 1000) * dur;
+        document.getElementById('trimStartVal').textContent = startSec.toFixed(1);
+        document.getElementById('trimEndVal').textContent = endSec.toFixed(1);
+        range.style.left = (s / 10) + '%';
+        range.style.right = (100 - e / 10) + '%';
+        if (document.activeElement === startS) video.currentTime = startSec;
+        else if (document.activeElement === endS) video.currentTime = Math.max(0, endSec - 0.1);
+    };
+    startS.oninput = updateLabels;
+    endS.oninput = updateLabels;
+    panel.dataset.duration = dur;
+    updateLabels();
+    panel.classList.remove('hidden');
+}
+
+async function applyTrim() {
+    const path = state.images[state.currentImageIndex];
+    const panel = document.getElementById('trimPanel');
+    const dur = parseFloat(panel.dataset.duration || '0');
+    if (!path || !dur) return;
+    const startFrac = parseInt(document.getElementById('trimStartSlider').value) / 1000;
+    const endFrac = parseInt(document.getElementById('trimEndSlider').value) / 1000;
+    const start_ms = Math.round(startFrac * dur * 1000);
+    const end_ms = Math.round(endFrac * dur * 1000);
+    if (end_ms - start_ms < 200) { showToast('En az 0.2 saniye seçin', 'warning'); return; }
+
+    const btn = document.getElementById('trimApplyBtn');
+    btn.disabled = true; btn.textContent = 'Kesiliyor…';
+    try {
+        const res = await fetch(`${API_BASE}/edit/${encodeURIComponent(path)}/trim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start_ms, end_ms }),
+        });
+        if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            showToast(d.detail || 'Video kesme hatası', 'error');
+            return;
+        }
+        showToast('Video kesildi', 'success', 2500);
+        panel.classList.add('hidden');
+        elements.lightboxVideo.src = `${API_BASE}/image/${encodeURIComponent(path)}?t=${Date.now()}`;
+        const rb = document.getElementById('videoRevertBtn');
+        rb.disabled = false; rb.style.opacity = '1';
+    } catch {
+        showToast('Bağlantı hatası', 'error');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Kes ve Kaydet';
+    }
+}
+
+async function revertVideoEdit() {
+    const path = state.images[state.currentImageIndex];
+    if (!path) return;
+    if (!confirm('Orijinal videoya dönülsün mü?')) return;
+    try {
+        const res = await fetch(`${API_BASE}/edit/${encodeURIComponent(path)}/revert`, { method: 'POST' });
+        const d = await res.json();
+        if (d.reverted) {
+            showToast('Orijinal video geri yüklendi', 'success');
+            elements.lightboxVideo.src = `${API_BASE}/image/${encodeURIComponent(path)}?t=${Date.now()}`;
+            const rb = document.getElementById('videoRevertBtn');
+            rb.disabled = true; rb.style.opacity = '0.4';
+        } else {
+            showToast(d.reason || 'Yedek bulunamadı', 'warning');
+        }
+    } catch {
+        showToast('Bağlantı hatası', 'error');
+    }
+}
+
+// ── Adjust (Faz 9 — ışık/renk/keskinlik + canlı önizleme) ──
+
+const _ADJUST_SLIDERS = [
+    { id: 'brightness', def: 1.0, dec: 2 },
+    { id: 'contrast',   def: 1.0, dec: 2 },
+    { id: 'saturation', def: 1.0, dec: 2 },
+    { id: 'sharpness',  def: 1.0, dec: 2 },
+    { id: 'temperature', def: 0,  dec: 0 },
+    { id: 'gamma',      def: 1.0, dec: 2 },
+];
+
+function _livePreview() {
+    // CSS filter ile yaklaşık canlı önizleme (sharpness/gamma CSS'te yok → yaklaşık)
+    const b = parseFloat(document.getElementById('brightnessSlider').value);
+    const c = parseFloat(document.getElementById('contrastSlider').value);
+    const s = parseFloat(document.getElementById('saturationSlider').value);
+    const t = parseFloat(document.getElementById('temperatureSlider').value);
+    const g = parseFloat(document.getElementById('gammaSlider').value);
+    // sıcaklık → sepia + hue-rotate yaklaşımı; gamma → brightness çarpanıyla kaba yaklaşım
+    const warmSepia = t > 0 ? (t / 100 * 0.4).toFixed(2) : 0;
+    const coolHue = t < 0 ? Math.round(t / 100 * 40) : 0; // negatif derece = maviye
+    const gammaApprox = (b * (g >= 1 ? 1 + (g - 1) * 0.25 : g)).toFixed(3);
+    elements.lightboxImage.style.filter =
+        `brightness(${gammaApprox}) contrast(${c}) saturate(${s}) sepia(${warmSepia}) hue-rotate(${coolHue}deg)`;
+}
+
+function _clearPreview() {
+    elements.lightboxImage.style.filter = '';
+}
+
+function resetAdjustSliders() {
+    _ADJUST_SLIDERS.forEach(({ id, def, dec }) => {
+        document.getElementById(id + 'Slider').value = def;
+        document.getElementById(id + 'Val').textContent = dec ? def.toFixed(dec) : String(def);
+    });
+    _clearPreview();
+}
 
 function openAdjustPanel() {
-    const panel = document.getElementById('adjustPanel');
-    document.getElementById('brightnessSlider').value = 1.0;
-    document.getElementById('contrastSlider').value = 1.0;
-    document.getElementById('brightnessVal').textContent = '1.0';
-    document.getElementById('contrastVal').textContent = '1.0';
-    panel.classList.remove('hidden');
+    document.getElementById('filterPanel').classList.add('hidden');
+    resetAdjustSliders();
+    document.getElementById('adjustPanel').classList.remove('hidden');
+    _ADJUST_SLIDERS.forEach(({ id, dec }) => {
+        const slider = document.getElementById(id + 'Slider');
+        slider.oninput = e => {
+            const v = parseFloat(e.target.value);
+            document.getElementById(id + 'Val').textContent = dec ? v.toFixed(dec) : String(v);
+            _livePreview();
+        };
+    });
+}
 
-    document.getElementById('brightnessSlider').oninput = e => {
-        document.getElementById('brightnessVal').textContent = parseFloat(e.target.value).toFixed(2);
-    };
-    document.getElementById('contrastSlider').oninput = e => {
-        document.getElementById('contrastVal').textContent = parseFloat(e.target.value).toFixed(2);
-    };
+function closeAdjustPanel() {
+    document.getElementById('adjustPanel').classList.add('hidden');
+    _clearPreview();
 }
 
 async function applyAdjust() {
-    const brightness = parseFloat(document.getElementById('brightnessSlider').value);
-    const contrast = parseFloat(document.getElementById('contrastSlider').value);
+    const params = {
+        brightness: parseFloat(document.getElementById('brightnessSlider').value),
+        contrast: parseFloat(document.getElementById('contrastSlider').value),
+        saturation: parseFloat(document.getElementById('saturationSlider').value),
+        sharpness: parseFloat(document.getElementById('sharpnessSlider').value),
+        temperature: parseFloat(document.getElementById('temperatureSlider').value),
+        gamma: parseFloat(document.getElementById('gammaSlider').value),
+    };
+    closeAdjustPanel();
+    await applyEdit('adjust', params);
+}
+
+// ── Filter presets (Faz 9) ──
+
+function openFilterPanel() {
     document.getElementById('adjustPanel').classList.add('hidden');
-    await applyEdit('adjust', { brightness, contrast });
+    _clearPreview();
+    document.getElementById('filterPanel').classList.remove('hidden');
+}
+
+function closeFilterPanel() {
+    document.getElementById('filterPanel').classList.add('hidden');
+}
+
+async function applyFilterPreset(preset) {
+    closeFilterPanel();
+    await applyEdit('filter', { preset });
 }
 
 // ── Crop ──

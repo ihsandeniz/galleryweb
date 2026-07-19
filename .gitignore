@@ -11,6 +11,9 @@ cache/
 .DS_Store
 node_modules/
 
+# Self-host: kullanıcının foto/video kütüphanesi (docker compose volume mount noktası)
+photos/
+
 # Database files
 *.db
 *.sqlite

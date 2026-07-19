@@ -1840,6 +1840,88 @@ body.light {
     z-index: 5;
 }
 
+/* ========== Faz 9 — Düzenleme Stüdyosu ========== */
+.adjust-panel { max-height: 78vh; overflow-y: auto; z-index: 6; }
+
+.filter-panel { min-width: 260px; }
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.filter-preset {
+    padding: 10px 8px;
+    font-size: 13px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filter-preset:hover {
+    border-color: var(--accent);
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--accent);
+}
+
+/* Video trim */
+.trim-panel { min-width: 300px; }
+
+.trim-track {
+    position: relative;
+    height: 34px;
+    margin: 6px 0 14px;
+}
+
+.trim-range {
+    position: absolute;
+    top: 13px;
+    height: 8px;
+    background: linear-gradient(90deg, var(--accent), #f59e0b);
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+.trim-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    margin: 0 !important;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    pointer-events: none;
+}
+
+.trim-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 26px;
+    border-radius: 5px;
+    background: #fff;
+    border: 2px solid var(--accent);
+    cursor: ew-resize;
+    pointer-events: auto;
+}
+
+.trim-slider::-moz-range-thumb {
+    width: 16px;
+    height: 26px;
+    border-radius: 5px;
+    background: #fff;
+    border: 2px solid var(--accent);
+    cursor: ew-resize;
+    pointer-events: auto;
+}
+
 /* ========== Watermark Modal, EXIF Edit ========== */
 .wm-body, .exif-edit-body {
     padding: 16px;

@@ -1,0 +1,28 @@
+# ── GalleryWeb — Self-host (Yerel Mod) ────────────────────────────────────────
+# En kolay kurulum: Python/pip gerektirmez, sadece Docker.
+#   docker compose up --build
+#   → http://localhost:5000  (login YOK)
+#
+# Fotoğraflarınız: ./photos klasörüne koyun (veya aşağıdaki volume yolunu değiştirin),
+# sonra arayüzden "Klasör Aç" ile /photos dizinini seçin.
+#
+# NOT: Bu compose YEREL modu (login'siz self-host) çalıştırır. Çok kullanıcılı
+#      hosted SaaS (Supabase + pgvector) için SETUP.md → "Hosted" bölümüne bakın.
+
+services:
+  galleryweb:
+    build: .
+    container_name: galleryweb
+    ports:
+      - "5000:5000"
+    volumes:
+      # Fotoğraf/video kütüphaneniz (salt-okunur önerilir; düzenleme için :rw yapın)
+      - ./photos:/photos
+      # Thumbnail cache + düzenleme yedekleri kalıcı olsun
+      - galleryweb_cache:/app/cache
+    environment:
+      - PORT=5000
+    restart: unless-stopped
+
+volumes:
+  galleryweb_cache:

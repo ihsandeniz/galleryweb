@@ -1,0 +1,27 @@
+# ── GalleryWeb — Self-host (Yerel Mod) bağımlılıkları ─────────────────────────
+# Bu dosya SADECE login'siz self-host yerel modu (main.py) içindir.
+# Bulut/hosted SaaS için: requirements.txt (Supabase, pgvector, CLIP dahil ~2.5GB).
+#
+# Kurulum:  pip install -r requirements-selfhost.txt
+# Çalıştır: python main.py   →   http://localhost:5000
+
+# ── Core ──
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+slowapi==0.1.9
+
+# ── Dosya & görsel işleme ──
+Pillow==11.0.0
+pillow-heif==0.21.0
+python-multipart==0.0.17
+aiofiles==24.1.0
+
+# ── Galeri özellikleri (izleme / kopya bulma / QR) ──
+watchdog==3.0.0
+imagehash==4.3.1
+qrcode[pil]==7.4.2
+
+# NOT: Video düzenleme (trim) + poster kare için sistemde `ffmpeg` gereklidir.
+#      Debian/Ubuntu: apt install ffmpeg · macOS: brew install ffmpeg · Arch: pacman -S ffmpeg
+#      Thumbnail cache SQLite (stdlib) kullanır — ek DB kurulumu YOKTUR.

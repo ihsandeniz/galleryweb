@@ -1,0 +1,33 @@
+# Sanal ortamlar (host'a bağlı, bozuk shebang — asla kopyalama)
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+
+# Python cache
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+
+# Runtime verisi (container kendi cache'ini üretir)
+cache/
+*.log
+*.db
+*.sqlite
+
+# Sırlar
+.env
+.env.local
+.env.production
+
+# Geliştirme / test
+test-reports/
+frontend/**/.lean-ctx/
+node_modules/
+.git/
+.DS_Store
+
+# Tauri / Capacitor derleme çıktıları
+src-tauri/target/
+android/
+ios/

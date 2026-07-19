@@ -467,29 +467,77 @@
             <span id="imageName"></span>
         </div>
 
-        <!-- Edit Toolbar (Faz 5.1) -->
+        <!-- Edit Toolbar (Faz 5.1 + Faz 9 Studio) -->
         <div id="editToolbar" class="edit-toolbar hidden">
             <button class="edit-btn" id="editRotateCCW"  title="90° Sola Döndür">↺ 90°</button>
             <button class="edit-btn" id="editRotateCW"   title="90° Sağa Döndür">↻ 90°</button>
             <button class="edit-btn" id="editRotate180"  title="180° Döndür">↕ 180°</button>
+            <button class="edit-btn" id="editFlipH"      title="Yatay Çevir">⇋ Yatay</button>
+            <button class="edit-btn" id="editFlipV"      title="Dikey Çevir">⥯ Dikey</button>
             <button class="edit-btn" id="editCropBtn"    title="Kırp">✂ Kırp</button>
-            <button class="edit-btn" id="editAdjustBtn"  title="Parlaklık / Kontrast">☀ Ayarla</button>
+            <button class="edit-btn" id="editAdjustBtn"  title="Işık / Renk / Keskinlik">☀ Ayarla</button>
+            <button class="edit-btn" id="editFilterBtn"  title="Hazır Filtreler">✦ Filtre</button>
             <button class="edit-btn edit-btn--revert" id="editRevertBtn" title="Orijinale Dön">↩ Orijinal</button>
             <button class="edit-btn edit-btn--close" id="closeEditToolbarBtn" title="Düzenlemeyi Kapat">✕</button>
+        </div>
+
+        <!-- Video Edit Toolbar (Faz 9) -->
+        <div id="videoEditToolbar" class="edit-toolbar hidden">
+            <button class="edit-btn" id="videoTrimBtn" title="Videoyu Kes">✂ Kes (Trim)</button>
+            <button class="edit-btn edit-btn--revert" id="videoRevertBtn" title="Orijinale Dön">↩ Orijinal</button>
+            <button class="edit-btn edit-btn--close" id="closeVideoEditBtn" title="Düzenlemeyi Kapat">✕</button>
         </div>
 
         <!-- Crop Overlay Canvas -->
         <canvas id="cropCanvas" class="crop-canvas hidden"></canvas>
 
-        <!-- Adjust Panel -->
+        <!-- Adjust Panel (Faz 9 — canlı önizleme) -->
         <div id="adjustPanel" class="adjust-panel hidden">
             <label>Parlaklık <span id="brightnessVal">1.0</span>x</label>
             <input type="range" id="brightnessSlider" min="0.2" max="3.0" step="0.05" value="1.0">
             <label>Kontrast <span id="contrastVal">1.0</span>x</label>
             <input type="range" id="contrastSlider" min="0.2" max="3.0" step="0.05" value="1.0">
+            <label>Doygunluk <span id="saturationVal">1.0</span>x</label>
+            <input type="range" id="saturationSlider" min="0" max="2.5" step="0.05" value="1.0">
+            <label>Keskinlik <span id="sharpnessVal">1.0</span>x</label>
+            <input type="range" id="sharpnessSlider" min="0" max="3.0" step="0.05" value="1.0">
+            <label>Sıcaklık <span id="temperatureVal">0</span></label>
+            <input type="range" id="temperatureSlider" min="-100" max="100" step="5" value="0">
+            <label>Gamma <span id="gammaVal">1.0</span></label>
+            <input type="range" id="gammaSlider" min="0.2" max="3.0" step="0.05" value="1.0">
             <div class="adjust-actions">
                 <button id="adjustApplyBtn" class="btn btn-primary">Uygula</button>
+                <button id="adjustResetBtn" class="btn-icon">Sıfırla</button>
                 <button id="adjustCancelBtn" class="btn-icon">İptal</button>
+            </div>
+        </div>
+
+        <!-- Filter Presets Panel (Faz 9) -->
+        <div id="filterPanel" class="adjust-panel filter-panel hidden">
+            <div class="filter-grid">
+                <button class="filter-preset" data-preset="grayscale">Siyah-Beyaz</button>
+                <button class="filter-preset" data-preset="sepia">Sepya</button>
+                <button class="filter-preset" data-preset="vintage">Vintage</button>
+                <button class="filter-preset" data-preset="cool">Soğuk</button>
+                <button class="filter-preset" data-preset="warm">Sıcak</button>
+                <button class="filter-preset" data-preset="vivid">Canlı</button>
+            </div>
+            <div class="adjust-actions">
+                <button id="filterCancelBtn" class="btn-icon">Kapat</button>
+            </div>
+        </div>
+
+        <!-- Video Trim Panel (Faz 9) -->
+        <div id="trimPanel" class="adjust-panel trim-panel hidden">
+            <label>Başlangıç <span id="trimStartVal">0.0</span>s &nbsp; Bitiş <span id="trimEndVal">0.0</span>s</label>
+            <div class="trim-track" id="trimTrack">
+                <div class="trim-range" id="trimRange"></div>
+                <input type="range" id="trimStartSlider" class="trim-slider" min="0" max="1000" step="1" value="0">
+                <input type="range" id="trimEndSlider" class="trim-slider" min="0" max="1000" step="1" value="1000">
+            </div>
+            <div class="adjust-actions">
+                <button id="trimApplyBtn" class="btn btn-primary">Kes ve Kaydet</button>
+                <button id="trimCancelBtn" class="btn-icon">İptal</button>
             </div>
         </div>
     </div>
@@ -797,6 +845,11 @@
     <script>
     // Auth guard — runs before gallery.js initialises
     (async function () {
+        // Yerel mod (self-host, varsayılan): login YOK — auth guard tamamen atlanır.
+        // Sadece bulut modu (hosted SaaS) kimlik doğrulaması gerektirir.
+        const mode = localStorage.getItem('galleryMode') || 'yerel';
+        if (mode !== 'bulut') return;
+
         const ok = await window.GW.requireAuth();
         if (!ok) return; // redirected to /login
 

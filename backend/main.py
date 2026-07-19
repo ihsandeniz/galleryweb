@@ -1503,9 +1503,162 @@ async def get_map_images():
 
 
 # ──────────────────────────────────────────────
-# Faz 5.1 — Image Editing (rotate / crop / adjust)
+# Faz 5.1 + Faz 9 — Image Editing Studio
+# rotate / crop / adjust / flip / filter
 # ──────────────────────────────────────────────
 
+# Faz 9 — preset filtre matrisleri (PIL). Her preset saf fonksiyon: img → img
+def _apply_filter_preset(img, preset: str):
+    from PIL import Image as _Image, ImageEnhance as _Enhance, ImageOps as _Ops
+    base = img.convert("RGB")
+    if preset == "grayscale":
+        return _Ops.grayscale(base).convert("RGB")
+    if preset == "sepia":
+        gray = _Ops.grayscale(base)
+        # Sepya tonu: gri → kahverengi tint
+        sepia = _Ops.colorize(gray, black="#2a1a08", white="#fff0c8", mid="#a87d3c")
+        return sepia
+    if preset == "vintage":
+        out = _Enhance.Color(base).enhance(0.72)
+        out = _Enhance.Contrast(out).enhance(0.92)
+        out = _Enhance.Brightness(out).enhance(1.05)
+        # Hafif sıcak tint
+        return _apply_temperature(out, 12)
+    if preset == "cool":
+        return _apply_temperature(base, -25)
+    if preset == "warm":
+        return _apply_temperature(base, 25)
+    if preset == "vivid":
+        out = _Enhance.Color(base).enhance(1.5)
+        out = _Enhance.Contrast(out).enhance(1.12)
+        return _Enhance.Sharpness(out).enhance(1.3)
+    raise HTTPException(400, f"Bilinmeyen filtre: {preset}")
+
+
+def _apply_temperature(img, amount: int):
+    """amount: -100 (soğuk/mavi) .. +100 (sıcak/kırmızı). Kanal kaydırma."""
+    from PIL import Image as _Image
+    rgb = img.convert("RGB")
+    r, g, b = rgb.split()
+    shift = int(max(-100, min(100, amount)) * 0.6)  # ±60 max kanal kayması
+    r = r.point(lambda p: max(0, min(255, p + shift)))
+    b = b.point(lambda p: max(0, min(255, p - shift)))
+    return _Image.merge("RGB", (r, g, b))
+
+
+def _apply_gamma(img, gamma: float):
+    """Midtone eğrisi (Photoshop gamma gibi): gamma > 1 aydınlatır, < 1 karartır (0.2..3.0)."""
+    gamma = max(0.2, min(3.0, gamma))
+    inv = 1.0 / gamma
+    lut = [min(255, int((i / 255.0) ** inv * 255 + 0.5)) for i in range(256)]
+    rgb = img.convert("RGB")
+    return rgb.point(lut * 3)
+
+
+@app.post("/api/edit/{path:path}/revert")
+async def revert_edit(path: str):
+    """Restore original file from .gallery_originals/ backup."""
+    full_path = find_in_directories(path)
+    if not full_path:
+        raise HTTPException(404, "Resim bulunamadı")
+
+    backup_path = full_path.parent / '.gallery_originals' / full_path.name
+    if not backup_path.exists():
+        return {"ok": False, "reverted": False, "reason": "Yedek bulunamadı"}
+
+    import shutil as _shutil
+    _shutil.copy2(backup_path, full_path)
+    cache_manager.invalidate_thumbnail(str(full_path))
+    return {"ok": True, "reverted": True}
+
+
+@app.get("/api/edit/{path:path}/has-backup")
+async def has_backup(path: str):
+    full_path = find_in_directories(path)
+    if not full_path:
+        return {"has_backup": False}
+    backup_path = full_path.parent / '.gallery_originals' / full_path.name
+    return {"has_backup": backup_path.exists()}
+
+
+# ── Faz 9 — Video Editing (trim) ──────────────────────────────────────────────
+
+_VIDEO_EDIT_EXT = {'.mp4', '.webm', '.mov', '.mkv', '.m4v'}
+
+
+@app.post("/api/edit/{path:path}/trim")
+async def trim_video(path: str, body: dict):
+    """Video başlangıç/bitiş kes (ffmpeg). İlk düzenlemede orijinali yedekler.
+
+    body: { start_ms: int, end_ms: int }
+    Stream-copy (hızlı, yeniden kodlama yok) → keyframe hassasiyeti kabul edilir.
+    """
+    import subprocess
+    import shutil as _shutil
+
+    full_path = find_in_directories(path)
+    if not full_path:
+        raise HTTPException(404, "Video bulunamadı")
+    if full_path.suffix.lower() not in _VIDEO_EDIT_EXT:
+        raise HTTPException(400, "Bu dosya türü kesilemez")
+
+    try:
+        start_ms = int(body.get("start_ms", 0))
+        end_ms = int(body.get("end_ms", 0))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Geçersiz zaman değeri")
+    if end_ms <= start_ms:
+        raise HTTPException(400, "Bitiş, başlangıçtan sonra olmalı")
+
+    # Backup original (only once — first edit)
+    backup_dir = full_path.parent / '.gallery_originals'
+    backup_path = backup_dir / full_path.name
+    if not backup_path.exists():
+        backup_dir.mkdir(exist_ok=True)
+        _shutil.copy2(full_path, backup_path)
+
+    # ffmpeg kaynağı = yedek (üst üste kesimlerde bozulmayı önler)
+    source = backup_path
+    start_s = start_ms / 1000.0
+    dur_s = (end_ms - start_ms) / 1000.0
+
+    tmp_out = full_path.parent / f".trim_{full_path.name}"
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error",
+             "-ss", f"{start_s:.3f}", "-i", str(source),
+             "-t", f"{dur_s:.3f}", "-c", "copy", "-avoid_negative_ts", "make_zero",
+             str(tmp_out)],
+            capture_output=True, timeout=120,
+        )
+        if proc.returncode != 0 or not tmp_out.exists():
+            # Stream-copy başarısızsa (bazı formatlar) yeniden kodlamayı dene
+            proc = subprocess.run(
+                ["ffmpeg", "-y", "-v", "error",
+                 "-ss", f"{start_s:.3f}", "-i", str(source),
+                 "-t", f"{dur_s:.3f}", "-c:v", "libx264", "-c:a", "aac",
+                 str(tmp_out)],
+                capture_output=True, timeout=300,
+            )
+        if proc.returncode != 0 or not tmp_out.exists():
+            err = (proc.stderr or b"").decode("utf-8", "replace")[:300]
+            raise HTTPException(500, f"Video kesme hatası: {err}")
+
+        _shutil.move(str(tmp_out), str(full_path))
+        cache_manager.invalidate_thumbnail(str(full_path))
+        return {"ok": True, "has_backup": True}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Video kesme zaman aşımına uğradı")
+    finally:
+        if tmp_out.exists():
+            try:
+                tmp_out.unlink()
+            except OSError:
+                pass
+
+
+# NOT: Bu genel route SPESİFİK route'lardan (/revert, /has-backup, /trim) SONRA
+# tanımlanmalı — aksi halde {path:path} greedy olduğu için onları yutar.
 @app.post("/api/edit/{path:path}")
 async def edit_image(path: str, body: dict):
     """Edit image in-place. Backs up original to .gallery_originals/ on first edit."""
@@ -1533,24 +1686,51 @@ async def edit_image(path: str, body: dict):
         params = body.get("params", {})
 
         if operation == "rotate":
-            degrees = int(params.get("degrees", 90))
-            img = img.rotate(-degrees, expand=True)
+            degrees = float(params.get("degrees", 90))
+            img = img.rotate(-degrees, expand=True, resample=_Image.BICUBIC)
+        elif operation == "flip":
+            direction = params.get("direction", "horizontal")
+            if direction == "horizontal":
+                img = img.transpose(_Image.FLIP_LEFT_RIGHT)
+            elif direction == "vertical":
+                img = img.transpose(_Image.FLIP_TOP_BOTTOM)
+            else:
+                raise HTTPException(400, f"Bilinmeyen çevirme yönü: {direction}")
         elif operation == "crop":
             x = int(params.get("x", 0))
             y = int(params.get("y", 0))
             w = int(params.get("w", img.width))
             h = int(params.get("h", img.height))
             # Clamp to image bounds
+            x = max(0, min(x, img.width))
+            y = max(0, min(y, img.height))
             x2 = min(x + w, img.width)
             y2 = min(y + h, img.height)
+            if x2 <= x or y2 <= y:
+                raise HTTPException(400, "Geçersiz kırpma alanı")
             img = img.crop((x, y, x2, y2))
         elif operation == "adjust":
             brightness = float(params.get("brightness", 1.0))
             contrast = float(params.get("contrast", 1.0))
+            saturation = float(params.get("saturation", 1.0))
+            sharpness = float(params.get("sharpness", 1.0))
+            temperature = float(params.get("temperature", 0.0))
+            gamma = float(params.get("gamma", 1.0))
             if brightness != 1.0:
                 img = _Enhance.Brightness(img).enhance(brightness)
             if contrast != 1.0:
                 img = _Enhance.Contrast(img).enhance(contrast)
+            if saturation != 1.0:
+                img = _Enhance.Color(img).enhance(saturation)
+            if sharpness != 1.0:
+                img = _Enhance.Sharpness(img).enhance(sharpness)
+            if temperature != 0.0:
+                img = _apply_temperature(img, temperature)
+            if gamma != 1.0:
+                img = _apply_gamma(img, gamma)
+        elif operation == "filter":
+            preset = params.get("preset", "")
+            img = _apply_filter_preset(img, preset)
         else:
             raise HTTPException(400, f"Bilinmeyen operasyon: {operation}")
 
@@ -1568,32 +1748,6 @@ async def edit_image(path: str, body: dict):
         raise
     except Exception as e:
         raise HTTPException(500, f"Düzenleme hatası: {e}")
-
-
-@app.post("/api/edit/{path:path}/revert")
-async def revert_edit(path: str):
-    """Restore original file from .gallery_originals/ backup."""
-    full_path = find_in_directories(path)
-    if not full_path:
-        raise HTTPException(404, "Resim bulunamadı")
-
-    backup_path = full_path.parent / '.gallery_originals' / full_path.name
-    if not backup_path.exists():
-        return {"ok": False, "reverted": False, "reason": "Yedek bulunamadı"}
-
-    import shutil as _shutil
-    _shutil.copy2(backup_path, full_path)
-    cache_manager.invalidate_thumbnail(str(full_path))
-    return {"ok": True, "reverted": True}
-
-
-@app.get("/api/edit/{path:path}/has-backup")
-async def has_backup(path: str):
-    full_path = find_in_directories(path)
-    if not full_path:
-        return {"has_backup": False}
-    backup_path = full_path.parent / '.gallery_originals' / full_path.name
-    return {"has_backup": backup_path.exists()}
 
 
 # ──────────────────────────────────────────────
