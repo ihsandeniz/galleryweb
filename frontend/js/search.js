@@ -15,6 +15,12 @@
         const searchInput = document.getElementById('searchInput');
         if (!searchWrap || !searchInput) return;
 
+        // AI semantik arama yalnızca BULUT modunda çalışır (CLIP/pgvector sunucu
+        // tarafında). Yerel/self-host modda /api/search yok → butonu hiç ekleme,
+        // aksi halde boş bir tam-ekran overlay'e (404) götürüyordu.
+        const mode = localStorage.getItem('galleryMode') || 'yerel';
+        if (mode !== 'bulut') return;
+
         // AI toggle button
         const aiBtn = document.createElement('button');
         aiBtn.id = 'aiSearchBtn';
@@ -122,12 +128,17 @@
 
     function setLoading(on) {
         const el = document.getElementById('asoLoading');
-        const grid = document.getElementById('asoGrid');
         if (!el) return;
         el.classList.toggle('hidden', !on);
-        if (grid) grid.innerHTML = '';
-        hide('asoUpgrade');
-        hide('asoEmpty');
+        // Önceki durumu YALNIZCA yükleme başlarken temizle. Daha önce bu temizlik
+        // her çağrıda (finally'deki setLoading(false) dahil) çalışıp renderResults/
+        // renderError/upgrade banner'ı anında silip overlay'i boş bırakıyordu.
+        if (on) {
+            const grid = document.getElementById('asoGrid');
+            if (grid) grid.innerHTML = '';
+            hide('asoUpgrade');
+            hide('asoEmpty');
+        }
     }
 
     function renderResults(results, q) {
