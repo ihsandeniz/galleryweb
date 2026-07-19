@@ -1404,10 +1404,10 @@ body::after {
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
     border-top: 1px solid var(--border-active);
-    padding: 10px 16px;
+    padding: 14px 22px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 18px;
     z-index: 300;
 }
 
@@ -1423,23 +1423,39 @@ body::after {
 
 .batch-actions {
     display: flex;
-    gap: 6px;
+    gap: 10px;
     flex-wrap: wrap;
     flex: 1;
 }
 
 .batch-actions .btn-icon {
-    font-size: 12px;
-    padding: 5px 10px;
+    width: auto;      /* genel .btn-icon 34px kareyi ez — metin kırpılıyordu */
+    height: auto;
+    font-size: 12.5px;
+    padding: 9px 15px;
     border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--bg-elevated);
     color: var(--text-primary);
+    white-space: nowrap;
+    flex-shrink: 0;   /* sığmayınca kırpma yok — alt satıra sar */
 }
 
 .batch-actions .btn-icon:hover {
     border-color: var(--border-default);
     color: var(--accent);
+}
+
+/* İptal butonu batch-actions dışında — genel .btn-icon 34px kare olduğundan
+   "✕ İptal" metni sıkışıyordu; ferah, otomatik genişlikli yap. */
+#batchCancel.btn-icon {
+    width: auto;
+    height: auto;
+    padding: 9px 16px;
+    font-size: 12.5px;
+    border-radius: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .btn-danger {
