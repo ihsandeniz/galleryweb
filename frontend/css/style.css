@@ -192,6 +192,11 @@ body::after {
     z-index: 100;
 }
 
+/* Kaydırılabilir sütun: doğrudan çocuklar küçülmesin (flex-shrink:1 varsayılanı
+   içerik taştığında bölüm başlıklarını eziyor, Türkçe Ö/Ü/İ noktaları kırpılıyordu).
+   Taşan içerik overflow-y:auto ile kaydırılır. */
+.sidebar > * { flex-shrink: 0; }
+
 .sidebar.collapsed {
     width: 60px;
     min-width: 60px;
