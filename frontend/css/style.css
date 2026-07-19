@@ -352,10 +352,24 @@ body::after {
 .topbar-search {
     flex: 1;
     max-width: 400px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* AI arama butonu (search.js ile eklenir) input'un sağında satır-içi durur;
+   flex olmadan alt satıra düşüp header'ı dikeyde taşırıyordu. */
+.topbar-search > .ai-search-btn {
+    flex-shrink: 0;
+    width: auto;
+    padding: 0 10px;
+    height: 34px;
+    white-space: nowrap;
 }
 
 #searchInput {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     height: 34px;
     background: var(--bg-elevated);
     border: 1px solid var(--border-subtle);
