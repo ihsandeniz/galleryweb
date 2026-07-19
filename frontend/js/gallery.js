@@ -3060,6 +3060,15 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(err => {
         console.warn('SW registration failed:', err);
     });
+    // Yeni service worker devraldığında sayfayı bir kez otomatik yenile —
+    // böylece güncellenen CSS/JS anında gelir (eski SW cache-first idi ve
+    // güncellemeler kullanıcıya hiç ulaşmıyordu). Sonsuz döngü koruması: bir kez.
+    let _swReloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_swReloaded) return;
+        _swReloaded = true;
+        window.location.reload();
+    });
 }
 
 window.addEventListener('beforeinstallprompt', e => {

@@ -1,5 +1,8 @@
-// GalleryWeb Service Worker — v1
-const STATIC_CACHE = 'gallery-static-v1';
+// GalleryWeb Service Worker — v2
+// v1 index.html'i Cache-First sunuyordu → yeni ?v= sürümleri kullanıcıya hiç
+// ulaşmıyordu. v2: HTML/navigasyon Network-First (online'da hep taze),
+// statikler Stale-While-Revalidate (offline çalışır + arka planda güncellenir).
+const STATIC_CACHE = 'gallery-static-v2';
 const THUMB_CACHE  = 'gallery-thumbs-v1';
 
 const STATIC_ASSETS = [
@@ -35,6 +38,16 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
+    // HTML / navigasyon (index.html dahil) — Network First.
+    // Cache-First idi → yeni ?v= sürümlerini işaret eden taze index.html asla
+    // gelmiyordu. Artık online'da hep taze, offline'da cache'e düşer.
+    if (event.request.mode === 'navigate' ||
+        url.pathname === '/' ||
+        (event.request.destination === 'document')) {
+        event.respondWith(networkFirstDoc(event.request));
+        return;
+    }
+
     // API data — Network First (always fresh)
     if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/thumbnail') && !url.pathname.startsWith('/api/image')) {
         event.respondWith(networkFirst(event.request));
@@ -47,24 +60,28 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Static assets — Cache First
-    event.respondWith(cacheFirst(event.request, STATIC_CACHE));
+    // Static assets (css/js) — Stale-While-Revalidate: anında cache'ten ver,
+    // arka planda güncelle. ?v= bump zaten yeni URL = taze getirir; bu strateji
+    // versiyonsuz istekleri de bir sonraki yüklemede tazeler (Cache-First'te
+    // asla tazelenmiyordu).
+    event.respondWith(staleWhileRevalidate(event.request, STATIC_CACHE));
 });
 
-async function cacheFirst(request, cacheName) {
-    const cached = await caches.match(request);
-    if (cached) return cached;
+// Doküman için Network-First: online taze HTML, çevrimdışı cache fallback.
+async function networkFirstDoc(request) {
     try {
         const response = await fetch(request);
         if (response.ok) {
-            const cache = await caches.open(cacheName);
+            const cache = await caches.open(STATIC_CACHE);
             cache.put(request, response.clone());
         }
         return response;
     } catch {
-        return new Response('Çevrimdışı — önbellekte yok', { status: 503 });
+        const cached = await caches.match(request) || await caches.match('/');
+        return cached || new Response('Çevrimdışı', { status: 503 });
     }
 }
+
 
 async function networkFirst(request) {
     try {
