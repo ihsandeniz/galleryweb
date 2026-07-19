@@ -38,7 +38,7 @@ The **same codebase** powers both. Local mode is the default and needs zero exte
 ### Option A · Python (zero extra services)
 
 ```bash
-git clone https://github.com/<you>/galleryweb.git
+git clone https://github.com/ihsandeniz/galleryweb.git
 cd galleryweb/backend
 pip install -r requirements-selfhost.txt   # lightweight — no CLIP/Supabase
 python main.py                              # → http://localhost:5000
@@ -51,7 +51,7 @@ Then open `http://localhost:5000`, click **Klasör Aç / Open Folder**, and pick
 ### Option B · Docker (no Python needed)
 
 ```bash
-git clone https://github.com/<you>/galleryweb.git
+git clone https://github.com/ihsandeniz/galleryweb.git
 cd galleryweb
 mkdir photos                # put your photos/videos here
 docker compose up --build   # → http://localhost:5000
