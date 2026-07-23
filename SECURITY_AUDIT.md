@@ -6,6 +6,37 @@
 
 ---
 
+## 2026-07-23 — Full audit round (test team) / Tam denetim turu
+
+**EN —** A 5-agent audit produced 37 findings (0 critical, 8 high). Fixed 18; the rest were
+intentionally deferred with reasons (see below).
+
+- **Fixed:** removed leaked `r2_key`/`local_path` from the photo API response; tag input length
+  limit (anti-DoS); `ALLOWED_ORIGINS='*'` is now rejected and falls back to localhost; Docker
+  container runs as a **non-root** user; swallowed EXIF/token exceptions now log; front-end async
+  error handling, an event-listener leak guard, a11y `alt` text, and self-healing offline queue.
+- **Documented, not code-changed:** local mode has **no auth by design** — this is now clearly
+  warned in the README (network exposure risk + `HOST=127.0.0.1` opt-out).
+- **Deferred (with reason):** moving auth tokens from `localStorage` to httpOnly cookies is a
+  cloud-mode refactor (the cloud/Supabase backend is not currently deployed and the local demo
+  auto-login flow depends on JS-readable tokens); tracked as a known limitation.
+
+**TR —** 5 ajanlı denetim 37 bulgu çıkardı (0 kritik, 8 yüksek). 18'i düzeltildi; gerisi
+gerekçeyle bilinçli ertelendi.
+
+- **Düzeltildi:** foto API yanıtından sızan `r2_key`/`local_path` kaldırıldı; etiket uzunluk sınırı
+  (DoS önleme); `ALLOWED_ORIGINS='*'` artık reddedilip localhost'a düşer; Docker konteyneri
+  **root olmayan** kullanıcıyla çalışır; yutulan EXIF/token istisnaları artık loglanır; frontend
+  async hata yönetimi, listener sızıntı koruması, erişilebilirlik `alt` metni, kendini onaran
+  offline kuyruk.
+- **Dokümante edildi, kod değişmedi:** yerel modda **tasarım gereği auth yok** — README'de ağ
+  erişim riski + `HOST=127.0.0.1` seçeneği ile açıkça uyarıldı.
+- **Ertelendi (gerekçeli):** auth token'larını `localStorage`'dan httpOnly cookie'ye taşımak
+  bulut-modu refactoru (bulut/Supabase arka ucu şu an dağıtılmadı, yerel demo oto-giriş akışı
+  JS-okunabilir token'a bağlı); bilinen sınır olarak izleniyor.
+
+---
+
 ## Issues Found & Fixed
 
 ### 1. Refresh Token Security (CRITICAL) - FIXED
