@@ -246,7 +246,7 @@ function showUndoToast(message, trashId) {
             } else {
                 showToast('Geri alma başarısız', 'error');
             }
-        } catch { showToast('Bağlantı hatası', 'error'); }
+        } catch (e) { console.error(e); showToast('Bağlantı hatası', 'error'); }
     });
 
     setTimeout(() => toast.remove(), 8000);
@@ -630,15 +630,24 @@ async function init() {
                         state.currentDirectory = d.path;
                         renderDirChips();
                         elements.emptyState.classList.add('hidden');
-                        loadFavorites().then(() => loadRatings()).then(() => loadBookmarks()).then(() => loadImages());
-                        startWatcher();
+                        // MNT-F002: watcher, görüntüler yüklendikten SONRA başlamalı —
+                        // aksi halde state.images boşken dosya değişiklikleri kaçırılır.
+                        loadFavorites()
+                            .then(() => loadRatings())
+                            .then(() => loadBookmarks())
+                            .then(() => loadImages())
+                            .then(() => startWatcher());
                         updateTrashCount();
                         updateBookmarkBtnState();
                     } else if (d.path) {
                         autoConnectDirectory(d.path);
                     }
                 })
-                .catch(() => {});
+                .catch((e) => {
+                    // MNT-F001: sessiz yutma yerine kullanıcıyı bilgilendir + logla
+                    console.error('Başlangıç klasör bilgisi alınamadı:', e);
+                    showToast('Başlangıç durumu yüklenemedi. Sayfayı yenileyin.', 'error');
+                });
         }
     }
 }
@@ -658,7 +667,8 @@ function clearDirectory() {
     elements.emptyState.classList.remove('hidden');
     elements.emptyState.innerHTML = '<p>📁 Klasör seçmek için yukarıdaki butona tıklayın</p>';
     localStorage.removeItem('galleryPath');
-    fetch(`${API_BASE}/clear-directory`, { method: 'POST' }).catch(() => {});
+    // MNT-F005: fire-and-forget ama hatayı en azından logla (backend state leak teşhisi)
+    fetch(`${API_BASE}/clear-directory`, { method: 'POST' }).catch((e) => console.error('clear-directory başarısız:', e));
     updatePagination();
 }
 
@@ -701,7 +711,7 @@ async function addDirectory(path) {
         startWatcher();
         updateBookmarkBtnState();
         showToast(`Eklendi: ${data.path.split('/').pop()}`, 'success');
-    } catch { showToast('Bağlantı hatası', 'error'); }
+    } catch (e) { console.error(e); showToast('Bağlantı hatası', 'error'); }
 }
 
 async function removeDirectory(path) {
@@ -721,7 +731,7 @@ async function removeDirectory(path) {
         } else {
             await loadImages();
         }
-    } catch { showToast('Bağlantı hatası', 'error'); }
+    } catch (e) { console.error(e); showToast('Bağlantı hatası', 'error'); }
 }
 
 // ========== Auto Connect ==========
@@ -820,7 +830,7 @@ async function navigateBrowser(path) {
             li.addEventListener('click', () => navigateBrowser(entry.path));
             elements.browserList.appendChild(li);
         });
-    } catch { showToast('Bağlantı hatası', 'error'); }
+    } catch (e) { console.error('Klasör tarama hatası:', e); showToast('Bağlantı hatası', 'error'); }
 }
 
 async function selectCurrentBrowsedDir() {
@@ -855,7 +865,7 @@ async function selectCurrentBrowsedDir() {
         updateTrashCount();
         updateBookmarkBtnState();
         if (!elements.tagBar.classList.contains('hidden')) loadAllTags();
-    } catch { showToast('Hata oluştu', 'error'); }
+    } catch (e) { console.error(e); showToast('Hata oluştu', 'error'); }
 }
 
 function renderHistory() {
@@ -1084,7 +1094,11 @@ async function loadRatings() {
         const res = await fetch(`${API_BASE}/ratings`);
         if (!res.ok) return;
         const data = await res.json();
-        state.ratings = new Map(Object.entries(data.ratings));
+        // MNT-F006: rating değerlerini sayıya zorla — JSON string dönerse yıldız
+        // karşılaştırması (i < stars) yanlış sonuç vermesin.
+        state.ratings = new Map(
+            Object.entries(data.ratings).map(([k, v]) => [k, parseInt(v, 10) || 0])
+        );
     } catch { /* sessiz */ }
 }
 
@@ -1118,7 +1132,7 @@ async function setRating(stars) {
         renderRatingStars();
         // Update gallery item star overlay if visible
         updateGalleryItemRating(imagePath, stars);
-    } catch { showToast('Puan kaydedilemedi', 'error'); }
+    } catch (e) { console.error(e); showToast('Puan kaydedilemedi', 'error'); }
 }
 
 async function clearRating() {
@@ -1129,7 +1143,7 @@ async function clearRating() {
         state.ratings.delete(imagePath);
         renderRatingStars();
         updateGalleryItemRating(imagePath, 0);
-    } catch { showToast('Puan silinemedi', 'error'); }
+    } catch (e) { console.error(e); showToast('Puan silinemedi', 'error'); }
 }
 
 function updateGalleryItemRating(imagePath, stars) {
@@ -1195,7 +1209,7 @@ function renderBookmarkDropdown() {
                 updateBookmarkBtnState();
                 showToast('Yer imi eklendi', 'success');
             }
-        } catch { showToast('Yer imi eklenemedi', 'error'); }
+        } catch (e) { console.error(e); showToast('Yer imi eklenemedi', 'error'); }
     });
     dd.appendChild(addBtn);
 
@@ -1228,7 +1242,7 @@ function renderBookmarkDropdown() {
                 await loadBookmarks();
                 elements.bookmarkDropdown.classList.remove('hidden');
                 updateBookmarkBtnState();
-            } catch { showToast('Silinemedi', 'error'); }
+            } catch (e) { console.error(e); showToast('Silinemedi', 'error'); }
         });
         item.appendChild(label);
         item.appendChild(del);
@@ -1823,7 +1837,7 @@ function buildGalleryItem(imagePath, index) {
             const d = await res.json();
             if (d.is_favorite) { state.favorites.add(imagePath); heart.classList.add('active'); }
             else { state.favorites.delete(imagePath); heart.classList.remove('active'); }
-        } catch { showToast('Favori güncellenemedi', 'error'); }
+        } catch (e) { console.error(e); showToast('Favori güncellenemedi', 'error'); }
     });
 
     item.appendChild(img);
@@ -2026,6 +2040,8 @@ function openLightbox(index) {
         elements.lightboxImage.classList.remove('hidden');
         elements.lightboxVideo.classList.add('hidden');
         elements.lightboxImage.src = `${API_BASE}/image/${encodeURIComponent(imagePath)}`;
+        // UI-F007: screen reader için anlamlı alt metni (a11y — WCAG 1.1.1)
+        elements.lightboxImage.alt = `${imagePath.split('/').pop()} — ${index + 1}/${state.images.length}`;
     }
 
     elements.autoplayToggleBtn.classList.toggle('active', state.videoAutoplay);
@@ -2508,7 +2524,7 @@ async function deleteCurrentImage() {
         updatePagination();
         updateTrashCount();
         showUndoToast(`"${data.filename}" silindi`, data.trash_id);
-    } catch { showToast('Hata oluştu', 'error'); }
+    } catch (e) { console.error(e); showToast('Hata oluştu', 'error'); }
 }
 
 async function updateTrashCount() {
@@ -2569,7 +2585,7 @@ async function renderTrashList() {
             });
             elements.trashList.appendChild(li);
         });
-    } catch { showToast('Çöp kutusu yüklenemedi', 'error'); }
+    } catch (e) { console.error(e); showToast('Çöp kutusu yüklenemedi', 'error'); }
 }
 
 // ========== Tags ==========
@@ -2712,11 +2728,11 @@ async function toggleExifPanel() {
                     body: JSON.stringify({ content: noteTextarea.value })
                 });
                 showToast('Not kaydedildi', 'success');
-            } catch { showToast('Not kaydedilemedi', 'error'); }
+            } catch (e) { console.error(e); showToast('Not kaydedilemedi', 'error'); }
         });
 
         panel.classList.remove('hidden');
-    } catch { showToast('Metadata alınamadı', 'error'); }
+    } catch (e) { console.error(e); showToast('Metadata alınamadı', 'error'); }
 }
 
 function renderExifTags(tags, imagePath) {
@@ -2761,7 +2777,7 @@ async function addExifTag(imagePath) {
             renderExifTags([...currentTags, d.tag], imagePath);
         }
         if (!elements.tagBar.classList.contains('hidden')) loadAllTags();
-    } catch { showToast('Hata oluştu', 'error'); }
+    } catch (e) { console.error(e); showToast('Hata oluştu', 'error'); }
 }
 
 window.toggleExifPanel = toggleExifPanel;
@@ -2903,7 +2919,7 @@ async function batchDelete() {
         exitSelectMode();
         await loadImages();
         updateTrashCount();
-    } catch { showToast('Toplu silme hatası', 'error'); }
+    } catch (e) { console.error(e); showToast('Toplu silme hatası', 'error'); }
 }
 
 async function batchFavorite(action) {
@@ -2918,7 +2934,7 @@ async function batchFavorite(action) {
         showToast(`${d.count} resim ${action === 'add' ? 'favorilere eklendi' : 'favorilerden çıkarıldı'}`, 'success');
         await loadFavorites();
         renderGallery();
-    } catch { showToast('Hata oluştu', 'error'); }
+    } catch (e) { console.error(e); showToast('Hata oluştu', 'error'); }
 }
 
 async function batchTag() {
@@ -2935,7 +2951,7 @@ async function batchTag() {
         elements.batchTagModal.classList.add('hidden');
         showToast(`${d.count} resime "${d.tag}" etiketi eklendi`, 'success');
         if (!elements.tagBar.classList.contains('hidden')) loadAllTags();
-    } catch { showToast('Hata oluştu', 'error'); }
+    } catch (e) { console.error(e); showToast('Hata oluştu', 'error'); }
 }
 
 // ========== Duplicate Detection ==========
@@ -3313,7 +3329,7 @@ async function executeBatchExif() {
             startWatcher();
             updateTrashCount();
             updateBookmarkBtnState();
-        } catch { showToast('Bağlantı hatası', 'error'); }
+        } catch (e) { console.error(e); showToast('Bağlantı hatası', 'error'); }
     }
 
     // Keyboard shortcut T

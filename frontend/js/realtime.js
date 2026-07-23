@@ -15,9 +15,24 @@
 
     // ── Offline queue ──────────────────────────────────────────────────────────
 
+    // UI-F002: eski/bozuk şema localStorage'da takılı kalmasın — parse edilemeyen
+    // kuyruğu güvenle sıfırla (JSON.parse zaten try/catch'te, ama bozuk veri kalıcıydı).
+    function _readQueue() {
+        const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        if (!raw) return [];
+        try {
+            const q = JSON.parse(raw);
+            return Array.isArray(q) ? q : [];
+        } catch (e) {
+            console.warn('Bozuk offline kuyruğu sıfırlanıyor:', e);
+            localStorage.removeItem(OFFLINE_QUEUE_KEY);
+            return [];
+        }
+    }
+
     function queueOp(op) {
         try {
-            const q = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+            const q = _readQueue();
             q.push({ ...op, ts: Date.now() });
             localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q.slice(-50))); // max 50
         } catch { /* ignore */ }
@@ -25,9 +40,7 @@
 
     async function flushQueue() {
         try {
-            const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
-            if (!raw) return;
-            const q = JSON.parse(raw);
+            const q = _readQueue();
             if (!q.length) return;
 
             const remaining = [];
@@ -53,9 +66,7 @@
     }
 
     function queueLength() {
-        try {
-            return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]').length;
-        } catch { return 0; }
+        return _readQueue().length;
     }
 
     // ── Supabase init ──────────────────────────────────────────────────────────

@@ -1,5 +1,10 @@
 // ========== Vim-Style Keybindings ==========
 
+// UI-F001: modül iki kez yüklenirse (dinamik reload / tekrar enjeksiyon) listener
+// çiftlenmesin — eski kaydı iptal edip tek AbortController ile bağla.
+if (window._keybindController) window._keybindController.abort();
+window._keybindController = new AbortController();
+
 document.addEventListener('keydown', (e) => {
     // Eğer input alanındaysa keybinding'leri devre dışı bırak
     if (e.target.tagName === 'INPUT') {
@@ -18,7 +23,7 @@ document.addEventListener('keydown', (e) => {
     
     // Normal modda
     handleGalleryKeys(e);
-});
+}, { signal: window._keybindController.signal });
 
 function handleGalleryKeys(e) {
     switch(e.key.toLowerCase()) {

@@ -37,14 +37,14 @@
             <button id="modeSwitchBtn" class="topbar-btn" title="Mod Değiştir">📂</button>
             <!-- Auth: user avatar + dropdown -->
             <div id="userMenuWrap" class="user-menu-wrap hidden">
-                <button id="userMenuBtn" class="user-avatar-btn" title="Hesap" onclick="toggleUserMenu()">
+                <button id="userMenuBtn" class="user-avatar-btn" title="Hesap">
                     <span id="userInitials">?</span>
                 </button>
                 <div id="userDropdown" class="user-dropdown hidden">
                     <div id="userEmailLabel" class="ud-email"></div>
                     <div id="userTierLabel" class="ud-tier"></div>
                     <div class="ud-divider"></div>
-                    <button class="ud-logout" onclick="window.GW.logout()">Çıkış Yap</button>
+                    <button class="ud-logout">Çıkış Yap</button>
                 </div>
             </div>
         </div>
@@ -841,7 +841,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="/static/js/auth.js?v=1"></script>
     <script src="/static/js/saas-api.js?v=1"></script>
-    <script src="/static/js/realtime.js?v=1"></script>
+    <script src="/static/js/realtime.js?v=2"></script>
     <script>
     // Auth guard — runs before gallery.js initialises
     (async function () {
@@ -879,6 +879,9 @@
     function toggleUserMenu() {
         document.getElementById('userDropdown').classList.toggle('hidden');
     }
+    // UI-F006: inline onclick yerine addEventListener (CSP unsafe-inline gerektirmez + refactor-güvenli)
+    document.getElementById('userMenuBtn')?.addEventListener('click', toggleUserMenu);
+    document.querySelector('.ud-logout')?.addEventListener('click', () => window.GW.logout());
     // Close dropdown on outside click
     document.addEventListener('click', function (e) {
         const wrap = document.getElementById('userMenuWrap');
@@ -887,8 +890,8 @@
         }
     });
     </script>
-    <script src="/static/js/gallery.js?v=22"></script>
-    <script src="/static/js/keybinds.js?v=19"></script>
+    <script src="/static/js/gallery.js?v=23"></script>
+    <script src="/static/js/keybinds.js?v=20"></script>
     <script src="/static/js/slideshow.js?v=18"></script>
     <script src="/static/js/search.js?v=2"></script>
 </body>
