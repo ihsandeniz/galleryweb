@@ -7,7 +7,7 @@
 # sonra arayüzden "Klasör Aç" ile /photos dizinini seçin.
 #
 # NOT: Bu compose YEREL modu (login'siz self-host) çalıştırır. Çok kullanıcılı
-#      hosted SaaS (Supabase + pgvector) için SETUP.md → "Hosted" bölümüne bakın.
+#      hosted SaaS (Supabase + pgvector) kurulumu için SETUP.md dosyasına bakın.
 
 services:
   galleryweb:

@@ -28,3 +28,4 @@ ios/
 
 # Test cache
 .pytest_cache/
+.gstack/
