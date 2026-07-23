@@ -107,6 +107,8 @@ Local and cloud mode are switchable in the UI (📂 / ☁ toggle). Local mode ne
 ## Security & privacy
 
 - Local mode stores everything on your machine and makes **no outbound calls** for auth.
+- ⚠️ **Local mode has no authentication — this is by design (single-user desktop use).** The server binds to `0.0.0.0`, so **anyone on the same network/Wi-Fi can read, tag, and delete your photos** via the API. Only run it on a network you trust. To restrict it to your own machine, start with `HOST=127.0.0.1` (or keep it behind a firewall). Do **not** expose local mode directly to the internet — use the hosted/cloud mode (with accounts) for multi-user or public deployments.
+- If you deploy behind a reverse proxy for cloud mode, set `ALLOWED_ORIGINS` to your exact domains (never `*` — the server rejects `*` and falls back to localhost).
 - Never commit your `.env` (it's git-ignored). Copy `.env.example` and fill in your own keys for cloud mode.
 - See [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 
