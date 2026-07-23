@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -12,6 +13,15 @@ class CacheManager:
     def _like_escape(s: str) -> str:
         """Escape % and _ for use in SQLite LIKE patterns (ESCAPE '\\')."""
         return s.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+    @classmethod
+    def _dir_prefix_like(cls, gallery_dir: str) -> str:
+        """Bir klasör altındaki tüm yolları eşleyen LIKE deseni üret.
+        Yollar OS-native ayraçla saklanır (Linux '/', Windows '\\'); sabit '/'
+        kullanmak Windows'ta klasör-kapsamlı sorguları (etiket/çöp/puan) BOŞ
+        döndürüyordu → os.sep ile OS'a duyarlı hale getirildi (Windows uyumu)."""
+        base = gallery_dir.rstrip('/\\')
+        return cls._like_escape(base) + cls._like_escape(os.sep) + '%'
 
     def _init_db(self):
         conn = sqlite3.connect(self.db_path)
@@ -236,7 +246,7 @@ class CacheManager:
                 WHERE it.image_path LIKE ? ESCAPE '\\'
                 GROUP BY t.name
                 ORDER BY cnt DESC, t.name
-            """, (self._like_escape(gallery_dir.rstrip('/')) + '/%',)).fetchall()
+            """, (self._dir_prefix_like(gallery_dir),)).fetchall()
         ]
         conn.close()
         return result
@@ -302,14 +312,13 @@ class CacheManager:
         return row
 
     def get_trash_items(self, gallery_dir: str) -> list:
-        gallery_dir = gallery_dir.rstrip('/')
         conn = sqlite3.connect(self.db_path)
         rows = conn.execute("""
             SELECT id, original_path, trash_path, deleted_at
             FROM trash
             WHERE original_path LIKE ? ESCAPE '\\'
             ORDER BY deleted_at DESC
-        """, (self._like_escape(gallery_dir) + '/%',)).fetchall()
+        """, (self._dir_prefix_like(gallery_dir),)).fetchall()
         conn.close()
         return [
             {"id": r[0], "original": r[1], "trash": r[2], "deleted_at": r[3]}
@@ -354,11 +363,10 @@ class CacheManager:
 
     def get_ratings_for_dir(self, gallery_dir: str) -> dict:
         """Returns {image_path: stars} for all rated images in gallery_dir."""
-        gallery_dir = gallery_dir.rstrip('/')
         conn = sqlite3.connect(self.db_path)
         rows = conn.execute(
             "SELECT image_path, stars FROM ratings WHERE image_path LIKE ? ESCAPE '\\'",
-            (self._like_escape(gallery_dir) + '/%',)
+            (self._dir_prefix_like(gallery_dir),)
         ).fetchall()
         conn.close()
         return {row[0]: row[1] for row in rows}
