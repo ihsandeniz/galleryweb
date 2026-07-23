@@ -198,8 +198,8 @@ def _extract_exif_and_thumbs(content: bytes, mime: str) -> dict:
             result["gps_lat"] = lat
             result["gps_lon"] = lon
 
-    except Exception:
-        pass  # EXIF/thumb errors are non-fatal
+    except Exception as exc:
+        logger.warning("EXIF çıkarımı başarısız (non-fatal): %s", exc)  # API-F003
 
     return result
 
@@ -383,8 +383,8 @@ async def serve_photo(
             uid = _uuid.UUID(payload["sub"])
             r = await db.execute(select(Profile).where(Profile.id == uid))
             current_user = r.scalar_one_or_none()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Query-param token doğrulaması başarısız: %s", exc)  # MNT-F007
 
     if share_token:
         link_res = await db.execute(select(SharingLink).where(SharingLink.id == share_token))
@@ -447,8 +447,8 @@ async def serve_thumbnail(
             uid = _uuid.UUID(payload["sub"])
             r = await db.execute(select(Profile).where(Profile.id == uid))
             current_user = r.scalar_one_or_none()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Query-param token doğrulaması başarısız: %s", exc)  # MNT-F007
 
     if share_token:
         # Validate: sharing_link exists and the photo belongs to its gallery

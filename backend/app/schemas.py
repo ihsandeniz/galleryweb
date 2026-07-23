@@ -98,8 +98,9 @@ class PhotoOut(BaseModel):
     tags: list[str] = []
     rating: int
     is_favorite: bool
-    r2_key: Optional[str] = None
-    local_path: Optional[str] = None
+    # r2_key / local_path bilinçli olarak response'tan ÇIKARILDI (API-F004): depolama
+    # adresleme şeması + sunucu dosya yolu istemciye sızmamalı. İçerik erişimi
+    # /api/photos/{id}/file veya presigned URL üzerinden yapılır.
     created_at: datetime
 
     model_config = {"from_attributes": True}

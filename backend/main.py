@@ -24,7 +24,6 @@ import itertools
 import json
 from cache_manager import CacheManager
 from thumbnail_gen import ThumbnailGenerator
-import mimetypes
 
 
 def get_local_ip() -> str | None:
@@ -43,6 +42,14 @@ _PORT = int(os.getenv("PORT", "5000"))
 _env_origins = os.getenv("ALLOWED_ORIGINS", "")
 if _env_origins:
     _origins = [o.strip() for o in _env_origins.split(",") if o.strip()]
+    # Güvenlik: kimlik bilgili (credentialed) CORS ile wildcard birleşimi tarayıcıda
+    # zaten yasak + kullanıcı verisini her origin'e açar. "*" gelirse güvenli
+    # localhost varsayılanına düş ve uyar. (SEC-F003)
+    if "*" in _origins:
+        print("⚠️  ALLOWED_ORIGINS='*' güvensiz — localhost varsayılanına dönülüyor.")
+        _origins = [f"http://127.0.0.1:{_PORT}", f"http://localhost:{_PORT}"]
+        if _local_ip:
+            _origins.append(f"http://{_local_ip}:{_PORT}")
 else:
     _origins = [f"http://127.0.0.1:{_PORT}", f"http://localhost:{_PORT}"]
     if _local_ip:
@@ -662,13 +669,25 @@ async def get_image_tags(path: str):
     return {"tags": cache_manager.get_image_tags(str(full_path))}
 
 
+_TAG_MAX_LEN = 100
+
+
+def _clean_tag(raw) -> str:
+    """Tag'i normalize et + sınırla. Boşsa/çok uzunsa 400. (API-F005 — DoS/aşırı-boyut önlemi;
+    cache_manager parametreli sorgu kullandığı için SQLi riski yok, sadece boyut sınırı.)"""
+    tag = str(raw or "").strip()
+    if not tag:
+        raise HTTPException(400, "Tag boş olamaz")
+    if len(tag) > _TAG_MAX_LEN:
+        raise HTTPException(400, f"Tag en fazla {_TAG_MAX_LEN} karakter olabilir")
+    return tag
+
+
 @app.post("/api/tag/{path:path}")
 async def add_tag(path: str, data: dict):
     if not current_directories:
         raise HTTPException(400, "Klasör seçilmemiş")
-    tag = data.get("tag", "").strip()
-    if not tag:
-        raise HTTPException(400, "Tag boş olamaz")
+    tag = _clean_tag(data.get("tag"))
     full_path = find_in_directories(path)
     if full_path is None:
         raise HTTPException(404, "Dosya bulunamadı")
@@ -785,9 +804,7 @@ async def batch_tag(data: dict):
     if not current_directories:
         raise HTTPException(400, "Klasör seçilmemiş")
     paths = data.get("paths", [])
-    tag = data.get("tag", "").strip()
-    if not tag:
-        raise HTTPException(400, "Tag boş olamaz")
+    tag = _clean_tag(data.get("tag"))
     count = 0
     for path in paths:
         full_path = find_in_directories(path)
@@ -804,7 +821,7 @@ async def batch_tag(data: dict):
 
 def _apply_watermark(img, config: dict):
     """Apply text watermark to a PIL Image copy. Returns new image (original unchanged)."""
-    from PIL import ImageDraw, ImageFont
+    from PIL import ImageDraw  # ImageFont, kullanıldığı yerlerde _IF alias'ıyla import edilir
     img = img.copy().convert("RGBA")
     overlay = img.copy()
     draw = ImageDraw.Draw(overlay)
@@ -1800,4 +1817,7 @@ if __name__ == "__main__":
     # reload = geliştirici modu (dosya izler, süreci ikiye katlar). Son kullanıcıda
     # kapalı olmalı — hızlı başlar, az RAM. Geliştirirken: GALLERYWEB_DEV=1 python main.py
     _dev = os.getenv("GALLERYWEB_DEV") == "1"
-    uvicorn.run("main:app", host="0.0.0.0", port=_PORT, reload=_dev, log_level="info")
+    # HOST varsayılan 0.0.0.0 (telefon/aynı-ağ erişimi için). Tek makineye kısıtlamak
+    # için HOST=127.0.0.1 (README güvenlik notu — yerel modda auth yok).
+    _host = os.getenv("HOST", "0.0.0.0")
+    uvicorn.run("main:app", host=_host, port=_PORT, reload=_dev, log_level="info")
