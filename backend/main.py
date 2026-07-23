@@ -1797,4 +1797,7 @@ async def get_service_worker():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=_PORT, reload=True, log_level="info")
+    # reload = geliştirici modu (dosya izler, süreci ikiye katlar). Son kullanıcıda
+    # kapalı olmalı — hızlı başlar, az RAM. Geliştirirken: GALLERYWEB_DEV=1 python main.py
+    _dev = os.getenv("GALLERYWEB_DEV") == "1"
+    uvicorn.run("main:app", host="0.0.0.0", port=_PORT, reload=_dev, log_level="info")

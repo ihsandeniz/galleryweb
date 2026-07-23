@@ -15,7 +15,7 @@ A self-hostable photo & video gallery with a built-in **editing studio** — cro
 | **Who** | Anyone, on their own PC | Users who don't want to self-host |
 | **Login** | ❌ None — open the app and go | ✅ Accounts + multi-tenant |
 | **Data** | Stays on your disk | Server + object storage |
-| **Setup** | `python main.py` or `docker compose up` | Supabase + PostgreSQL (see [SETUP.md](SETUP.md)) |
+| **Setup** | Double-click `run.sh` / `run.bat` (or `docker compose up`) | Supabase + PostgreSQL (see [SETUP.md](SETUP.md)) |
 | **Cost** | Free forever | Your hosting / subscription |
 
 The **same codebase** powers both. Local mode is the default and needs zero external services.
@@ -35,7 +35,21 @@ The **same codebase** powers both. Local mode is the default and needs zero exte
 
 ## Quick start — Self-host (no login)
 
-### Option A · Python (zero extra services)
+### Option A · One click (easiest — no terminal knowledge needed)
+
+Download the project, then **double-click** the launcher for your system:
+
+- **Linux / macOS** → `run.sh`
+- **Windows** → `run.bat`
+
+It sets everything up on first run (creates an isolated environment, installs
+dependencies) and opens the gallery in your browser at `http://localhost:5000`.
+You only need [Python 3.10+](https://www.python.org/downloads/) installed first.
+
+> Kolay yol: `run.sh` (Linux/macOS) veya `run.bat` (Windows) dosyasına **çift tıklayın** —
+> gerisini kendisi halleder, tarayıcıda galeri açılır.
+
+### Option B · Python by hand (zero extra services)
 
 ```bash
 git clone https://github.com/ihsandeniz/galleryweb.git
@@ -48,7 +62,7 @@ Then open `http://localhost:5000`, click **Klasör Aç / Open Folder**, and pick
 
 > **Video editing** needs `ffmpeg` on your system (`apt install ffmpeg` / `brew install ffmpeg` / `pacman -S ffmpeg`).
 
-### Option B · Docker (no Python needed)
+### Option C · Docker (no Python needed)
 
 ```bash
 git clone https://github.com/ihsandeniz/galleryweb.git
@@ -58,6 +72,19 @@ docker compose up --build   # → http://localhost:5000
 ```
 
 Inside the app, open the `/photos` folder. `ffmpeg` is already included in the image.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| **Port 5000 already in use** | Start on another port: `PORT=5001 python main.py` (or set `PORT` in `docker-compose.yml`). |
+| **Video trimming does nothing** | `ffmpeg` isn't installed. `apt install ffmpeg` / `brew install ffmpeg` / `pacman -S ffmpeg`. Photos work without it. |
+| **HEIC / iPhone photos don't open** | The `pillow-heif` dependency covers this — reinstall with `pip install -r backend/requirements-selfhost.txt`. |
+| **`python: command not found`** | Install [Python 3.10+](https://www.python.org/downloads/). On Windows, tick **"Add Python to PATH"** during install. |
+| **Phone can't reach the gallery** | Use the `📱 Telefon erişimi:` URL printed on startup, and make sure the phone is on the **same Wi-Fi**. |
+| **Want developer auto-reload** | `GALLERYWEB_DEV=1 python main.py` (off by default for faster startup). |
 
 ---
 
