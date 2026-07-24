@@ -7,6 +7,13 @@ set -e
 # Script'in bulunduğu dizine geç (çift tıkta cwd farklı olabilir)
 cd "$(dirname "$0")"
 
+# Otomatik güncelleme (yalnız git kopyasıysa; internet/değişiklik yoksa atlanır).
+# ZIP olarak indirdiyseniz güncelleme için: ./guncelle.sh
+if command -v git >/dev/null 2>&1 && [ -d ".git" ]; then
+    echo "🔄 Son sürüm kontrol ediliyor..."
+    git pull --ff-only 2>/dev/null || true
+fi
+
 # Python bul — bağımlılıkların hazır wheel'i olan sürümleri (3.10–3.13) tercih et.
 # Çok yeni sürümler (ör. 3.14) bazı paketleri kaynaktan derlemeye zorlar ve kurulum
 # derleyici hatasıyla çöker; o yüzden önce uyumlu bir yorumlayıcı ararız.
@@ -43,11 +50,15 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-# Bağımlılıklar kurulu mu? (fastapi'yi işaret olarak kontrol et)
-if ! python -c "import fastapi" >/dev/null 2>&1; then
-    echo "📦 Bağımlılıklar kuruluyor (bir kereye mahsus, birkaç dakika)..."
+# Bağımlılıklar güncel mi? requirements dosyası son kurulumdan farklıysa OTOMATİK
+# yeniden kur. Böylece güncelleme geldiğinde .venv'i silmeye gerek kalmaz.
+REQ="backend/requirements-selfhost.txt"
+STAMP=".venv/installed-reqs.txt"
+if ! cmp -s "$REQ" "$STAMP" 2>/dev/null; then
+    echo "📦 Bağımlılıklar kuruluyor/güncelleniyor (bir kereye mahsus, birkaç dakika)..."
     pip install --upgrade pip >/dev/null
-    pip install -r backend/requirements-selfhost.txt
+    pip install -r "$REQ"
+    cp "$REQ" "$STAMP"
 fi
 
 # ffmpeg uyarısı (video düzenleme için gerekli, zorunlu değil)
@@ -64,5 +75,6 @@ fi
 ) &
 
 echo "🚀 GalleryWeb başlıyor → http://localhost:5000  (durdurmak için Ctrl+C)"
+echo "ℹ️  Güncellemek için istediğiniz zaman: ./guncelle.sh"
 cd backend
 exec python main.py

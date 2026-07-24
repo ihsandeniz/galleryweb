@@ -50,10 +50,12 @@ You only need [Python 3.10+](https://www.python.org/downloads/) installed first
 > Kolay yol: `run.sh` (Linux/macOS) veya `run.bat` (Windows) dosyasına **çift tıklayın** —
 > gerisini kendisi halleder, tarayıcıda galeri açılır.
 
-**Güncelleme / Updating (Windows):** `guncelle.bat` dosyasına çift tıklayın —
-en son sürümü GitHub'dan indirir. Fotoğraflarınız, ayarlarınız ve sanal ortamınız
-korunur; sonraki `run.bat` çalıştırmasında değişen bağımlılıklar otomatik kurulur.
-Yani güncelleme için hiçbir şeyi silmenize gerek yok. (Linux/macOS: `git pull`.)
+**Güncelleme / Updating:** en son sürümü almak için güncelleyiciyi çalıştırın —
+**Windows:** `guncelle.bat` · **Linux/macOS:** `./guncelle.sh`. GitHub'dan son sürümü
+indirir; fotoğraflarınız, ayarlarınız ve sanal ortamınız korunur. Sonraki
+`run.bat` / `run.sh` çalıştırmasında değişen bağımlılıklar otomatik kurulur —
+yani güncelleme için hiçbir şeyi silmenize gerek yok. (git ile klonladıysanız
+`run` zaten açılışta otomatik `git pull` yapar.)
 
 ### Option B · Python by hand (zero extra services)
 
