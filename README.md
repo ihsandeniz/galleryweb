@@ -44,10 +44,16 @@ Download the project, then **double-click** the launcher for your system:
 
 It sets everything up on first run (creates an isolated environment, installs
 dependencies) and opens the gallery in your browser at `http://localhost:5000`.
-You only need [Python 3.10+](https://www.python.org/downloads/) installed first.
+You only need [Python 3.10+](https://www.python.org/downloads/) installed first
+(on Windows, tick **"Add Python to PATH"** in the installer).
 
 > Kolay yol: `run.sh` (Linux/macOS) veya `run.bat` (Windows) dosyasına **çift tıklayın** —
 > gerisini kendisi halleder, tarayıcıda galeri açılır.
+
+**Güncelleme / Updating (Windows):** `guncelle.bat` dosyasına çift tıklayın —
+en son sürümü GitHub'dan indirir. Fotoğraflarınız, ayarlarınız ve sanal ortamınız
+korunur; sonraki `run.bat` çalıştırmasında değişen bağımlılıklar otomatik kurulur.
+Yani güncelleme için hiçbir şeyi silmenize gerek yok. (Linux/macOS: `git pull`.)
 
 ### Option B · Python by hand (zero extra services)
 

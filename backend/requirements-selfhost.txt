@@ -18,7 +18,7 @@ python-multipart==0.0.32  # 0.0.17→ 7 açık fix
 aiofiles==24.1.0
 
 # ── Galeri özellikleri (izleme / kopya bulma / QR) ──
-watchdog==3.0.0
+watchdog==6.0.0
 imagehash==4.3.1
 qrcode[pil]==7.4.2
 

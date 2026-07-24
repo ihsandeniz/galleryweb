@@ -1162,7 +1162,21 @@ async def watch_directory(request: Request):
         observer = Observer()
         for d in current_directories:
             observer.schedule(Handler(), str(d), recursive=False)
-        observer.start()
+        # Dosya-izleyici bazi Python/watchdog kombinasyonlarinda baslamayabilir
+        # (or. Python 3.13 + watchdog < 4). Bu durumda galeri calismaya devam
+        # etsin — sadece otomatik-yenileme devre disi kalir, hata yagmuru olmaz.
+        try:
+            observer.start()
+        except Exception as e:
+            print(f"[UYARI] Canli klasor izleme baslatilamadi ({e}) - "
+                  f"otomatik yenileme kapali, galeri normal calisir.")
+            yield 'data: {"type":"watch_unavailable"}\n\n'
+            while True:
+                if await request.is_disconnected():
+                    break
+                await asyncio.sleep(25)
+                yield 'data: {"type":"ping"}\n\n'
+            return
         try:
             while True:
                 if await request.is_disconnected():

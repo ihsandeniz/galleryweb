@@ -35,6 +35,6 @@ APScheduler==3.10.4
 slowapi==0.1.9
 
 # ── Existing features (keep for main.py compatibility) ────────────────────────
-watchdog==3.0.0
+watchdog==6.0.0
 imagehash==4.3.1
 qrcode[pil]==7.4.2
