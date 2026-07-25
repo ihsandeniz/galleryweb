@@ -5,22 +5,27 @@
 # Kurulum:  pip install -r requirements-selfhost.txt
 # Çalıştır: python main.py   →   http://localhost:5000
 
+# PİNLEME POLİTİKASI (2026-07-25): kesin `==` yerine "güvenlik tabanı + majör tavan".
+#   Neden: `==` pinleri yeni Python sürümlerinde (ör. 3.14) hazır wheel bulunamayınca
+#   paketi KAYNAKTAN derletiyor ve kurulum çöküyordu (`pydantic-core==2.27.1` cp314 wheel'i yok).
+#   `>=` tabanı güvenlik düzeltmelerini korur, `<majör` tavanı kırıcı değişikliği engeller.
+
 # ── Core ──
-fastapi==0.139.2          # 0.115.5→ starlette 1.3.1 güvenlik fix
-uvicorn[standard]==0.32.1
-pydantic==2.10.3
-slowapi==0.1.9
+fastapi>=0.139.2,<1.0        # taban: starlette 1.3.1 güvenlik fix
+uvicorn[standard]>=0.32.1,<1.0
+pydantic>=2.10.3,<3.0        # 3.14'te cp314 wheel'i olan 2.12+ seçilebilsin
+slowapi>=0.1.9,<0.2
 
 # ── Dosya & görsel işleme ──
-Pillow==12.3.0            # 11.0.0→ 14 açık fix
-pillow-heif==1.5.0        # 0.21.0→ PYSEC-2026-2258 fix
-python-multipart==0.0.32  # 0.0.17→ 7 açık fix
-aiofiles==24.1.0
+Pillow>=12.3.0,<14           # taban: 14 açık fix
+pillow-heif>=1.5.0,<2        # taban: PYSEC-2026-2258 fix
+python-multipart>=0.0.32,<0.1  # taban: 7 açık fix
+aiofiles>=24.1.0,<26
 
 # ── Galeri özellikleri (izleme / kopya bulma / QR) ──
-watchdog==6.0.0
-imagehash==4.3.1
-qrcode[pil]==7.4.2
+watchdog>=6.0.0,<7
+imagehash>=4.3.1,<5
+qrcode[pil]>=7.4.2,<9
 
 # NOT: Video düzenleme (trim) + poster kare için sistemde `ffmpeg` gereklidir.
 #      Debian/Ubuntu: apt install ffmpeg · macOS: brew install ffmpeg · Arch: pacman -S ffmpeg
