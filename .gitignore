@@ -29,3 +29,6 @@ ios/
 # Test cache
 .pytest_cache/
 .gstack/
+
+# Kişisel self-host kurulumu (kişisel yollar içerir — yayımlanmaz)
+docker-compose.kisisel.yml

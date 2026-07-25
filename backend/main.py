@@ -143,21 +143,25 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    # CSP, uygulamanın kendi CDN bağımlılıklarına izin vermeli; aksi halde kendi
-    # kaynaklarını bloklar (Google Fonts, Leaflet harita, Supabase cloud-auth).
-    #   fonts.googleapis/gstatic → Inter + JetBrains Mono (@import style.css)
-    #   unpkg                    → Leaflet CSS/JS (harita)
-    #   cdn.jsdelivr             → Supabase JS (bulut modu)
-    #   *.tile.openstreetmap.org → harita döşemeleri
+    # ── CSP: yerel (self-host) modda dış kaynak YOK ──────────────────────────
+    # Fontlar ve Leaflet artık frontend/vendor/ altında self-host edildiği için
+    # fonts.googleapis / fonts.gstatic / unpkg izinleri KALDIRILDI. Böylece bir
+    # regresyon CDN linkini geri getirse bile tarayıcı isteği bloklar.
+    #
+    # Kalan iki dış izin yalnızca BULUT modu içindir ve yerel modda tetiklenmez:
+    #   cdn.jsdelivr             → Supabase JS (realtime.js lazy yükler)
     #   *.supabase.co            → bulut API + realtime websocket
+    # img-src'deki OpenStreetMap ise harita altlığı içindir ve kullanıcı açıkça
+    # onay verene kadar istenmez (frontend: _mapTilePref). CSP burada yalnızca
+    # tavan çizer — asıl kapı istemcide.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
         "media-src 'self' blob: data:; "
         "connect-src 'self' ws: wss: https://*.supabase.co; "
-        "font-src 'self' data: https://fonts.gstatic.com"
+        "font-src 'self' data:"
     )
     return response
 

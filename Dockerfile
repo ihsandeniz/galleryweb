@@ -20,6 +20,13 @@ RUN pip install --no-cache-dir -r requirements-selfhost.txt
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
+# Cache dizini imajda ÖNCEDEN var olmalı (BASE_DIR=/app → CACHE_DIR=/app/cache).
+# Aksi halde docker-compose'daki named volume, imajda bulunmayan bir yola bağlanır;
+# Docker onu root sahipliğinde yaratır ve uid 999 ile çalışan uygulama SQLite'ı
+# açamayıp çöker ("unable to open database file" → restart döngüsü).
+# Dizin burada varsa Docker, volume'ü ilk oluştururken bu sahipliği kopyalar.
+RUN mkdir -p /app/cache/thumbnails
+
 # SEC-F002: root olarak çalıştırma — konteyner escape/uygulama zafiyetinde
 # host mount'ları (photos volume) tam yetkiyle yazılamasın diye ayrı kullanıcı.
 RUN groupadd -r galleryweb && useradd -r -g galleryweb galleryweb \

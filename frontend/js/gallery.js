@@ -432,6 +432,10 @@ async function init() {
     elements.mapBtn.addEventListener('click', openMapView);
     elements.closeMapBtn.addEventListener('click', closeMapView);
     elements.mapBackdrop.addEventListener('click', closeMapView);
+    // Harita altlığı gizlilik kapısı (bkz. _mapTilePref)
+    document.getElementById('mapTileAllowBtn')?.addEventListener('click', () => setMapTilePref('allow'));
+    document.getElementById('mapTileDenyBtn')?.addEventListener('click',  () => setMapTilePref('deny'));
+    document.getElementById('mapTileResetBtn')?.addEventListener('click', resetMapTilePref);
 
     // Kiosk mode
     elements.kioskBtn.addEventListener('click', toggleKioskMode);
@@ -1644,6 +1648,49 @@ function cleanupCompareInteractions() {
 // ========== Map View ==========
 let _mapInstance = null;
 let _mapMarkersLayer = null;
+let _mapTileLayer = null;
+
+// ── Harita altlığı gizlilik kapısı ──────────────────────────────────────────
+// Döşeme istekleri fotoğrafların GPS konumunu OpenStreetMap sunucusuna sızdırır.
+// Bu yüzden altlık, kullanıcı AÇIKÇA izin verene kadar hiç istenmez ('deny' de
+// kalıcı: her açılışta tekrar sormayalım). Tercih cihaz-yerel, sunucuya gitmez.
+const MAP_TILE_PREF_KEY = 'gw_map_tiles';
+
+function _mapTilePref() {
+    const v = localStorage.getItem(MAP_TILE_PREF_KEY);
+    return v === 'allow' || v === 'deny' ? v : null;
+}
+
+function _addMapTileLayer() {
+    if (_mapTileLayer || !_mapInstance) return;
+    _mapTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
+    }).addTo(_mapInstance);
+}
+
+function _syncMapConsentUI() {
+    const pref    = _mapTilePref();
+    const consent = document.getElementById('mapTileConsent');
+    const reset   = document.getElementById('mapTileResetBtn');
+    // Onay kutusu yalnızca henüz karar verilmemişken görünür.
+    consent?.classList.toggle('hidden', pref !== null);
+    // Karar verildiyse geri alma yolu görünür kalsın (tercih hapsi olmasın).
+    reset?.classList.toggle('hidden', pref === null);
+}
+
+function setMapTilePref(pref) {
+    localStorage.setItem(MAP_TILE_PREF_KEY, pref);
+    if (pref === 'allow') _addMapTileLayer();
+    _syncMapConsentUI();
+}
+
+function resetMapTilePref() {
+    localStorage.removeItem(MAP_TILE_PREF_KEY);
+    // Zaten yüklenmiş altlığı da kaldır — "sıfırla" dedikten sonra istek devam etmesin.
+    if (_mapTileLayer) { _mapInstance.removeLayer(_mapTileLayer); _mapTileLayer = null; }
+    _syncMapConsentUI();
+}
 
 async function openMapView() {
     if (elements.mapModal._loading) return;
@@ -1653,16 +1700,16 @@ async function openMapView() {
     // Init map once
     if (!_mapInstance) {
         _mapInstance = L.map('mapContainer').setView([39.9, 32.8], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            maxZoom: 19
-        }).addTo(_mapInstance);
+        // Altlık SADECE açık izin varsa eklenir; yoksa işaretçiler altlıksız gösterilir
+        // (konumların birbirine göre dağılımı yine görünür, dışarı istek gitmez).
+        if (_mapTilePref() === 'allow') _addMapTileLayer();
         _mapMarkersLayer = L.layerGroup().addTo(_mapInstance);
     } else {
         _mapMarkersLayer.clearLayers();
         setTimeout(() => _mapInstance.invalidateSize(), 100);
     }
 
+    _syncMapConsentUI();
     elements.mapImageCount.textContent = 'Yükleniyor...';
 
     try {

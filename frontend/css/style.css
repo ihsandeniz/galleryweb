@@ -1,5 +1,7 @@
-/* ========== Google Fonts Import ========== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* ========== Fonts (self-host) ==========
+   GİZLİLİK: fontlar vendor/fonts/ içinde yerelde durur — Google'a istek gitmez.
+   Yenilemek için: frontend/vendor/fonts/fonts.css yanındaki .woff2 dosyalarını değiştir. */
+@import url('/static/vendor/fonts/fonts.css');
 
 /* ========== CSS Variables (Cyberpunk HUD Theme) ========== */
 :root {
@@ -2498,4 +2500,102 @@ kbd {
     .stats-panel, .albums-panel { height: 85dvh; }
     .mobile-bottom-nav { height: 48px; }
     .main-content { padding-bottom: 56px; }
+}
+
+/* ========== Harita Altlığı Gizlilik Onayı ==========
+   Dış (OpenStreetMap) döşeme isteği fotoğrafların konumunu sızdırdığı için
+   varsayılan kapalı; bu blok kararı soran/geri alan arayüzü biçimlendirir. */
+.map-consent {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    margin: 0 0 var(--spacing-md);
+    background: linear-gradient(180deg, rgba(255, 196, 84, 0.10), rgba(255, 196, 84, 0.03));
+    border: 1px solid rgba(255, 196, 84, 0.32);
+    border-left: 3px solid #ffc454;
+    border-radius: 6px;
+}
+
+.map-consent-text {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--text-primary);
+}
+
+.map-consent-text strong { color: #ffc454; }
+
+.map-consent-text code {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--accent);
+}
+
+.map-consent-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.map-consent-actions .btn-sm {
+    padding: 7px 14px;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--bg-base);
+    background: #ffc454;
+    border: 1px solid #ffc454;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.map-consent-actions .btn-sm:hover {
+    box-shadow: 0 0 14px rgba(255, 196, 84, 0.45);
+    transform: translateY(-1px);
+}
+
+.map-consent-actions .btn-sm.btn-ghost {
+    color: var(--text-primary);
+    background: transparent;
+    border-color: var(--border-default);
+}
+
+.map-consent-actions .btn-sm.btn-ghost:hover {
+    border-color: var(--border-active);
+    box-shadow: var(--accent-glow-sm);
+}
+
+/* Kararı geri alma yolu — footer içinde sessiz bir bağlantı */
+.map-hint-link {
+    margin-left: auto;
+    padding: 0;
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color 0.18s ease;
+}
+
+.map-hint-link:hover { color: var(--accent); }
+
+.map-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.map-hint {
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
 }

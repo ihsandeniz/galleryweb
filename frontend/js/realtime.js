@@ -71,9 +71,26 @@
 
     // ── Supabase init ──────────────────────────────────────────────────────────
 
+    // GİZLİLİK: Supabase JS artık index.html'de statik <script> ile gelmiyor.
+    // Yerel (self-host) modda hiç çağrılmadığı için cdn.jsdelivr.net'e istek GİTMEZ.
+    // Sadece bulut modunda, realtime gerçekten bağlanacağı an indirilir.
+    let _sbJsPromise = null;
+    function _loadSupabaseJs() {
+        if (window.supabase) return Promise.resolve(true);
+        if (_sbJsPromise) return _sbJsPromise;
+        _sbJsPromise = new Promise((resolve) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+            s.onload  = () => resolve(true);
+            s.onerror = () => { _sbJsPromise = null; resolve(false); };
+            document.head.appendChild(s);
+        });
+        return _sbJsPromise;
+    }
+
     async function _initSupabase() {
         if (_sb) return _sb;
-        if (!window.supabase) {
+        if (!await _loadSupabaseJs()) {
             console.warn('[GW_RT] Supabase JS not loaded — realtime disabled');
             return null;
         }
