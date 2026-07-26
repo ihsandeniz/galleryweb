@@ -112,12 +112,39 @@ fn linux_render_gecici_cozumu() {
     }
 }
 
+/// AppImage'ın GStreamer eklenti tarayıcısı yolunu düzelt.
+///
+/// linuxdeploy'un gstreamer eklentisi `GST_PLUGIN_SCANNER_1_0` değişkenini
+/// Debian düzenine göre (`usr/lib/gstreamer1.0/gstreamer-1.0/…`) kuruyor; tarayıcı
+/// ise paketin içinde `usr/lib/gstreamer-1.0/…` altında duruyor. Yol tutmayınca
+/// GStreamer her eklenti için tarayıcıyı yeniden çalıştırmayı deniyor, başarısız
+/// oluyor ve konsolu "External plugin loader failed" uyarılarıyla dolduruyor
+/// (açılış da yavaşlıyor). Doğru yolu bulup ayarlıyoruz.
+#[cfg(target_os = "linux")]
+fn appimage_gstreamer_yolunu_duzelt() {
+    let Some(appdir) = std::env::var_os("APPDIR") else { return };
+    let appdir = PathBuf::from(appdir);
+    let adaylar = [
+        appdir.join("usr/lib/gstreamer-1.0/gst-plugin-scanner"),
+        appdir.join("usr/lib/x86_64-linux-gnu/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"),
+        appdir.join("usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"),
+    ];
+    if let Some(scanner) = adaylar.iter().find(|p| p.is_file()) {
+        std::env::set_var("GST_PLUGIN_SCANNER_1_0", scanner);
+        std::env::set_var("GST_PLUGIN_SCANNER", scanner);
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn appimage_gstreamer_yolunu_duzelt() {}
+
 #[cfg(not(target_os = "linux"))]
 fn linux_render_gecici_cozumu() {}
 
 fn main() {
     // GTK/WebKit başlatılmadan ÖNCE ayarlanmalı.
     linux_render_gecici_cozumu();
+    appimage_gstreamer_yolunu_duzelt();
 
     tauri::Builder::default()
         .manage(ServerProcess(Mutex::new(None)))
