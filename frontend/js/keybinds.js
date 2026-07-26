@@ -118,6 +118,18 @@ function handleGalleryKeys(e) {
 }
 
 function handleLightboxKeys(e) {
+    // Faz 10 — düzenleme çubuğu açıkken Ctrl+Z / Ctrl+Shift+Z zincirde gezinir.
+    // Sadece çubuk açıkken devrede: kapalıyken tarayıcının kendi davranışı kalsın.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        const bar = document.getElementById('editToolbar');
+        if (bar && !bar.classList.contains('hidden')) {
+            e.preventDefault();
+            const fn = e.shiftKey ? window.redoEdit : window.undoEdit;
+            if (typeof fn === 'function') fn();
+        }
+        return;
+    }
+
     switch(e.key.toLowerCase()) {
         case 'escape':
         case 'q':

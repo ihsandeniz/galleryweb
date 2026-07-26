@@ -566,6 +566,18 @@ async function init() {
         btn.addEventListener('click', () => applyFilterPreset(btn.dataset.preset));
     });
 
+    // Faz 10 — non-destructive geçmiş (geri/ileri al + adıma atlama)
+    document.getElementById('editUndoBtn').addEventListener('click', undoEdit);
+    document.getElementById('editRedoBtn').addEventListener('click', redoEdit);
+    document.getElementById('editHistoryBtn').addEventListener('click', toggleHistoryPanel);
+    document.getElementById('historyCloseBtn').addEventListener('click', () => {
+        document.getElementById('historyPanel').classList.add('hidden');
+    });
+    document.getElementById('historyList').addEventListener('click', (e) => {
+        const item = e.target.closest('.history-item');
+        if (item) gotoEditStep(parseInt(item.dataset.cursor, 10));
+    });
+
     // Faz 9 — Video edit (trim)
     document.getElementById('closeVideoEditBtn').addEventListener('click', closeVideoEditToolbar);
     document.getElementById('videoTrimBtn').addEventListener('click', openTrimPanel);
@@ -2138,6 +2150,7 @@ function toggleEditToolbar() {
 
 function closeEditToolbar() {
     document.getElementById('editToolbar').classList.add('hidden');
+    document.getElementById('historyPanel').classList.add('hidden');
     closeAdjustPanel();
     closeFilterPanel();
     cancelCropMode();
@@ -2153,12 +2166,100 @@ function closeVideoEditToolbar() {
 }
 
 async function checkEditBackup(imagePath) {
+    // Faz 10: yedek durumu + düzenleme zinciri tek çağrıda gelir
+    await refreshEditHistory(imagePath);
+}
+
+// ── Faz 10 — non-destructive zincir durumu ──
+
+let _editChain = { ops: [], cursor: 0, can_undo: false, can_redo: false, has_backup: false };
+
+function _renderChainState(d) {
+    if (!d) return;
+    _editChain = d;
+    const undoBtn = document.getElementById('editUndoBtn');
+    const redoBtn = document.getElementById('editRedoBtn');
+    const revertBtn = document.getElementById('editRevertBtn');
+    [[undoBtn, d.can_undo], [redoBtn, d.can_redo], [revertBtn, d.has_backup]].forEach(([btn, on]) => {
+        if (!btn) return;
+        btn.disabled = !on;
+        btn.style.opacity = on ? '1' : '0.4';
+    });
+    const list = document.getElementById('historyList');
+    if (!list) return;
+    list.innerHTML = '';
+    const base = document.createElement('li');
+    base.className = 'history-item' + (d.cursor === 0 ? ' history-item--current' : '');
+    base.textContent = '⌂ Orijinal görüntü';
+    base.dataset.cursor = '0';
+    list.appendChild(base);
+    (d.ops || []).forEach((op, i) => {
+        const li = document.createElement('li');
+        const applied = i < d.cursor;
+        li.className = 'history-item'
+            + (i + 1 === d.cursor ? ' history-item--current' : '')
+            + (applied ? '' : ' history-item--undone');
+        li.textContent = op.label;
+        li.dataset.cursor = String(i + 1);
+        list.appendChild(li);
+    });
+    const hint = document.getElementById('historyHint');
+    if (hint) hint.textContent = d.ops && d.ops.length
+        ? `${d.cursor}/${d.ops.length} adım uygulanmış`
+        : 'orijinal korunur';
+}
+
+function _reloadEditedImage(imagePath) {
+    if (typeof _clearPreview === 'function') _clearPreview();
+    elements.lightboxImage.src = `${API_BASE}/image/${encodeURIComponent(imagePath)}?t=${Date.now()}`;
+}
+
+async function refreshEditHistory(imagePath) {
     try {
-        const res = await fetch(`${API_BASE}/edit/${encodeURIComponent(imagePath)}/has-backup`);
-        const d = await res.json();
-        document.getElementById('editRevertBtn').disabled = !d.has_backup;
-        document.getElementById('editRevertBtn').style.opacity = d.has_backup ? '1' : '0.4';
-    } catch {}
+        const res = await fetch(`${API_BASE}/edit/${encodeURIComponent(imagePath)}/history`);
+        if (!res.ok) return;
+        _renderChainState(await res.json());
+    } catch (e) {
+        console.error('Düzenleme geçmişi okunamadı', e);
+    }
+}
+
+async function _chainAction(endpoint, body) {
+    const imagePath = state.images[state.currentImageIndex];
+    if (!imagePath) return;
+    try {
+        const res = await fetch(`${API_BASE}/edit/${encodeURIComponent(imagePath)}/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) { showToast(d.detail || 'İşlem başarısız', 'error'); return; }
+        _renderChainState(d);
+        if (d.changed) _reloadEditedImage(imagePath);
+    } catch (e) {
+        showToast('Bağlantı hatası', 'error');
+    }
+}
+
+const undoEdit = () => _chainAction('undo');
+const redoEdit = () => _chainAction('redo');
+const gotoEditStep = (cursor) => _chainAction('goto', { cursor });
+// keybinds.js Ctrl+Z / Ctrl+Shift+Z için (const window'a bağlanmaz)
+window.undoEdit = undoEdit;
+window.redoEdit = redoEdit;
+
+function toggleHistoryPanel() {
+    const panel = document.getElementById('historyPanel');
+    if (panel.classList.contains('hidden')) {
+        document.getElementById('adjustPanel').classList.add('hidden');
+        document.getElementById('filterPanel').classList.add('hidden');
+        panel.classList.remove('hidden');
+        const p = state.images[state.currentImageIndex];
+        if (p) refreshEditHistory(p);
+    } else {
+        panel.classList.add('hidden');
+    }
 }
 
 async function applyEdit(operation, params) {
@@ -2170,18 +2271,16 @@ async function applyEdit(operation, params) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ operation, params })
         });
+        const d = await res.json().catch(() => ({}));
         if (!res.ok) {
-            const d = await res.json().catch(() => ({}));
             showToast(d.detail || 'Düzenleme hatası', 'error');
             return;
         }
         showToast('Düzenleme uygulandı', 'success', 2000);
         // Reload image with cache-bust; canlı önizleme filtresini temizle
-        if (typeof _clearPreview === 'function') _clearPreview();
-        elements.lightboxImage.src = `${API_BASE}/image/${encodeURIComponent(imagePath)}?t=${Date.now()}`;
-        // Enable revert button
-        document.getElementById('editRevertBtn').disabled = false;
-        document.getElementById('editRevertBtn').style.opacity = '1';
+        _reloadEditedImage(imagePath);
+        // Yanıt zincir durumunu taşır → ek istek gerekmez
+        _renderChainState(d);
     } catch (e) {
         showToast('Bağlantı hatası', 'error');
     }
@@ -2196,9 +2295,9 @@ async function revertEdit() {
         const d = await res.json();
         if (d.reverted) {
             showToast('Orijinal dosya geri yüklendi', 'success');
-            elements.lightboxImage.src = `${API_BASE}/image/${encodeURIComponent(imagePath)}?t=${Date.now()}`;
-            document.getElementById('editRevertBtn').disabled = true;
-            document.getElementById('editRevertBtn').style.opacity = '0.4';
+            _reloadEditedImage(imagePath);
+            // Zincir sunucuda silindi → yerel durumu da sıfırla
+            _renderChainState({ ops: [], cursor: 0, can_undo: false, can_redo: false, has_backup: false });
         } else {
             showToast(d.reason || 'Yedek bulunamadı', 'warning');
         }

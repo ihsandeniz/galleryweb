@@ -179,7 +179,13 @@ async def prefix_rewrite(request: Request, call_next):
 @app.middleware("http")
 async def no_cache_static(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith("/static/"):
+    path = request.url.path
+    # API verisi (görsel/thumbnail hariç) hiçbir katmanda saklanmamalı. Aksi halde
+    # tarayıcı HTTP cache'i, doğrulayıcı başlığı olmayan JSON yanıtları sezgisel
+    # olarak saklayıp BAYAT veri döndürüyor — düzenleme geçmişi, etiketler, puanlar
+    # sunucuda değişmiş olsa bile eski hâliyle görünüyordu.
+    is_api_data = path.startswith(("/api/", "/yerel/api/")) and "/api/image" not in path
+    if path.startswith("/static/") or is_api_data:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -466,7 +472,12 @@ async def get_images(
     seen_names: set[str] = set()
     for base_dir in current_directories:
         if include_subfolders:
-            dir_paths = [p for p in base_dir.rglob("*") if p.suffix.lower() in active_supported]
+            # Gizli klasörleri atla — `.gallery_originals/` ve `.gallery_edits/`
+            # aksi halde düzenlenmiş her fotoğrafı galeride ikinci kez gösterirdi.
+            dir_paths = [p for p in base_dir.rglob("*")
+                         if p.suffix.lower() in active_supported
+                         and not any(part.startswith('.')
+                                     for part in p.relative_to(base_dir).parts)]
         else:
             dir_paths = [p for p in base_dir.iterdir() if p.suffix.lower() in active_supported]
         for p in dir_paths:
@@ -1605,19 +1616,340 @@ def _apply_gamma(img, gamma: float):
     return rgb.point(lut * 3)
 
 
+# ── Faz 10 — Non-destructive düzenleme zinciri (digiKam versioning fikri) ─────
+#
+# Model: dosya ASLA üst üste düzenlenmez. Her düzenleme `.gallery_edits/<ad>.json`
+# içindeki işlem zincirine eklenir; görüntü her seferinde TEMEL dosyadan (orijinal
+# yedek) baştan render edilir. Böylece:
+#   • sınırsız geri/ileri al (cursor) + herhangi bir adıma atlama
+#   • JPEG'de tekrarlı yeniden sıkıştırma kaybı yok (zincir hep orijinalden başlar)
+#   • orijinal her zaman bozulmadan durur
+
+_EDIT_DIR = '.gallery_edits'
+_ORIG_DIR = '.gallery_originals'
+_EDITABLE_EXT = {'.jpg', '.jpeg', '.png', '.webp', '.tiff', '.bmp'}
+
+_OP_LABELS_TR = {
+    "grayscale": "Siyah-Beyaz", "sepia": "Sepya", "vintage": "Vintage",
+    "cool": "Soğuk", "warm": "Sıcak", "vivid": "Canlı",
+}
+
+
+def _sidecar_path(full_path: Path) -> Path:
+    return full_path.parent / _EDIT_DIR / (full_path.name + '.json')
+
+
+def _original_path(full_path: Path) -> Path:
+    return full_path.parent / _ORIG_DIR / full_path.name
+
+
+def _sha256(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, 'rb') as f:
+        for block in iter(lambda: f.read(1 << 20), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _new_chain() -> dict:
+    return {"version": 1, "ops": [], "cursor": 0, "legacy_base": False, "render": None}
+
+
+def _is_stale(full_path: Path, chain: dict) -> bool:
+    """Dosya GalleryWeb dışında değiştirildi mi? (digiKam, Photoshop, senkron…)
+
+    Zincir yalnızca kendi yazdığı görüntünün üstünde anlamlı. Dosya başkası
+    tarafından değiştirilmişse eski zinciri uygulamak o düzenlemeyi SESSİZCE
+    ezerdi — bunun yerine zinciri geçersiz sayarız.
+    """
+    render = chain.get("render")
+    if not chain.get("ops") or not render:
+        return False
+    try:
+        st = full_path.stat()
+    except OSError:
+        return True
+    if st.st_size == render.get("size") and int(st.st_mtime) == render.get("mtime"):
+        return False  # hızlı yol: boyut + mtime aynı
+    return _sha256(full_path) != render.get("sha")
+
+
+def _load_chain(full_path: Path) -> dict:
+    sc = _sidecar_path(full_path)
+    if sc.exists():
+        try:
+            data = json.loads(sc.read_text(encoding='utf-8'))
+            data.setdefault("ops", [])
+            data.setdefault("cursor", len(data["ops"]))
+            data["cursor"] = max(0, min(int(data["cursor"]), len(data["ops"])))
+            if _is_stale(full_path, data):
+                logger.info("Düzenleme zinciri geçersiz (dosya dışarıdan değişti): %s", full_path)
+                _discard_chain(full_path)
+                return _new_chain()
+            return data
+        except (OSError, ValueError, TypeError) as e:
+            logger.warning("Düzenleme zinciri okunamadı (%s): %s", sc, e)
+    return _new_chain()
+
+
+def _discard_chain(full_path: Path) -> None:
+    """Sidecar + legacy temeli sil (zincir geçersizleştiğinde)."""
+    for stale in (_sidecar_path(full_path), _legacy_base_path(full_path)):
+        if stale.exists():
+            try:
+                stale.unlink()
+            except OSError as e:
+                logger.warning("Zincir dosyası silinemedi (%s): %s", stale, e)
+
+
+def _save_chain(full_path: Path, chain: dict) -> None:
+    sc = _sidecar_path(full_path)
+    sc.parent.mkdir(exist_ok=True)
+    tmp = sc.with_suffix(sc.suffix + '.tmp')
+    tmp.write_text(json.dumps(chain, ensure_ascii=False, indent=1), encoding='utf-8')
+    tmp.replace(sc)
+
+
+def _legacy_base_path(full_path: Path) -> Path:
+    return full_path.parent / _EDIT_DIR / (full_path.stem + '.base' + full_path.suffix)
+
+
+def _ensure_base(full_path: Path, chain: dict) -> Path:
+    """Zincirin render temelini garantiye al ve yolunu döndür.
+
+    • Hiç yedek yoksa → mevcut dosya gerçek orijinaldir, yedekle.
+    • Yedek var ama sidecar yoksa (ESKİ yıkıcı düzenleme sistemi) → mevcut dosya
+      kayıtsız düzenlemeler taşıyor olabilir; içerik yedekten farklıysa onu
+      `legacy base` olarak dondur ki eski emek kaybolmasın. Revert yine gerçek
+      orijinale döner.
+    """
+    orig = _original_path(full_path)
+    if not orig.exists():
+        orig.parent.mkdir(exist_ok=True)
+        import shutil as _shutil
+        _shutil.copy2(full_path, orig)
+        return orig
+
+    if chain.get("legacy_base"):
+        lb = _legacy_base_path(full_path)
+        if lb.exists():
+            return lb
+
+    if not _sidecar_path(full_path).exists():
+        differs = (full_path.stat().st_size != orig.stat().st_size
+                   or _sha256(full_path) != _sha256(orig))
+        if differs:
+            lb = _legacy_base_path(full_path)
+            lb.parent.mkdir(exist_ok=True)
+            import shutil as _shutil
+            _shutil.copy2(full_path, lb)
+            chain["legacy_base"] = True
+            return lb
+    return orig
+
+
+def _apply_op(img, op: str, params: dict):
+    """Tek bir düzenleme işlemini uygula. Zincir replay'i ile canlı düzenleme
+    AYNI kodu kullanır — böylece önizleme ile kaydedilen sonuç ayrışamaz."""
+    from PIL import Image as _Image, ImageEnhance as _Enhance
+
+    if op == "rotate":
+        degrees = float(params.get("degrees", 90))
+        return img.rotate(-degrees, expand=True, resample=_Image.BICUBIC)
+
+    if op == "flip":
+        direction = params.get("direction", "horizontal")
+        if direction == "horizontal":
+            return img.transpose(_Image.FLIP_LEFT_RIGHT)
+        if direction == "vertical":
+            return img.transpose(_Image.FLIP_TOP_BOTTOM)
+        raise HTTPException(400, f"Bilinmeyen çevirme yönü: {direction}")
+
+    if op == "crop":
+        x = max(0, min(int(params.get("x", 0)), img.width))
+        y = max(0, min(int(params.get("y", 0)), img.height))
+        x2 = min(x + int(params.get("w", img.width)), img.width)
+        y2 = min(y + int(params.get("h", img.height)), img.height)
+        if x2 <= x or y2 <= y:
+            raise HTTPException(400, "Geçersiz kırpma alanı")
+        return img.crop((x, y, x2, y2))
+
+    if op == "adjust":
+        out = img
+        for key, cls, default in (("brightness", _Enhance.Brightness, 1.0),
+                                  ("contrast", _Enhance.Contrast, 1.0),
+                                  ("saturation", _Enhance.Color, 1.0),
+                                  ("sharpness", _Enhance.Sharpness, 1.0)):
+            val = float(params.get(key, default))
+            if val != default:
+                out = cls(out).enhance(val)
+        temperature = float(params.get("temperature", 0.0))
+        if temperature != 0.0:
+            out = _apply_temperature(out, temperature)
+        gamma = float(params.get("gamma", 1.0))
+        if gamma != 1.0:
+            out = _apply_gamma(out, gamma)
+        return out
+
+    if op == "filter":
+        return _apply_filter_preset(img, params.get("preset", ""))
+
+    raise HTTPException(400, f"Bilinmeyen operasyon: {op}")
+
+
+def _op_label(entry: dict) -> str:
+    op, p = entry.get("op"), entry.get("params", {})
+    if op == "rotate":
+        deg = float(p.get("degrees", 90))
+        return f"↻ {deg:g}° döndür"
+    if op == "flip":
+        return "⇋ Yatay çevir" if p.get("direction") == "horizontal" else "⥯ Dikey çevir"
+    if op == "crop":
+        return f"✂ Kırp {int(p.get('w', 0))}×{int(p.get('h', 0))}"
+    if op == "filter":
+        preset = p.get("preset", "")
+        return f"✦ Filtre: {_OP_LABELS_TR.get(preset, preset)}"
+    if op == "adjust":
+        parts = []
+        for key, short, default in (("brightness", "parlaklık", 1.0), ("contrast", "kontrast", 1.0),
+                                    ("saturation", "doygunluk", 1.0), ("sharpness", "keskinlik", 1.0),
+                                    ("temperature", "sıcaklık", 0.0), ("gamma", "gamma", 1.0)):
+            val = float(p.get(key, default))
+            if val != default:
+                parts.append(f"{short} {val:g}")
+        return "☀ Ayar: " + (", ".join(parts) if parts else "değişiklik yok")
+    return f"• {op}"
+
+
+def _render_chain(full_path: Path, chain: dict) -> None:
+    """Temel dosyadan başlayarak cursor'a kadar olan işlemleri uygula ve kaydet."""
+    from PIL import Image as _Image
+
+    base = _ensure_base(full_path, chain)
+    ops = chain["ops"][:chain["cursor"]]
+
+    with _Image.open(base) as src:
+        img = src.copy()
+    for entry in ops:
+        img = _apply_op(img, entry.get("op"), entry.get("params", {}))
+
+    # Format kaynak uzantıdan belirlenir — dönüşümlerden sonra img.format None olur
+    suffix = full_path.suffix.lower()
+    fmt = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.png': 'PNG', '.webp': 'WEBP',
+           '.tiff': 'TIFF', '.bmp': 'BMP'}.get(suffix, 'PNG')
+    save_kwargs = {}
+    if fmt == 'JPEG':
+        save_kwargs.update(quality=92, subsampling=0)
+        img = img.convert("RGB")
+    elif fmt == 'WEBP':
+        save_kwargs.update(quality=92)
+
+    tmp = full_path.parent / f".render_{full_path.name}"
+    try:
+        img.save(tmp, format=fmt, **save_kwargs)
+        tmp.replace(full_path)
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+    # Yazdığımız görüntünün parmak izi — dosya dışarıdan değişirse zincir
+    # geçersiz sayılır (bkz. _is_stale)
+    st = full_path.stat()
+    chain["render"] = {"sha": _sha256(full_path), "size": st.st_size,
+                       "mtime": int(st.st_mtime)}
+    cache_manager.invalidate_thumbnail(str(full_path))
+
+
+def _chain_state(full_path: Path, chain: dict) -> dict:
+    return {
+        "ok": True,
+        "ops": [{"index": i, "op": e.get("op"), "label": _op_label(e),
+                 "params": e.get("params", {}), "at": e.get("at")}
+                for i, e in enumerate(chain["ops"])],
+        "cursor": chain["cursor"],
+        "can_undo": chain["cursor"] > 0,
+        "can_redo": chain["cursor"] < len(chain["ops"]),
+        "has_backup": _original_path(full_path).exists(),
+    }
+
+
+def _resolve_editable(path: str) -> Path:
+    full_path = find_in_directories(path)
+    if not full_path:
+        raise HTTPException(404, "Resim bulunamadı")
+    if full_path.suffix.lower() not in _EDITABLE_EXT:
+        raise HTTPException(400, "Bu dosya türü düzenlenemez")
+    return full_path
+
+
+@app.get("/api/edit/{path:path}/history")
+async def edit_history(path: str):
+    """Düzenleme zincirinin tam geçmişi + imleç konumu."""
+    full_path = find_in_directories(path)
+    if not full_path:
+        raise HTTPException(404, "Dosya bulunamadı")
+    return _chain_state(full_path, _load_chain(full_path))
+
+
+@app.post("/api/edit/{path:path}/undo")
+async def edit_undo(path: str):
+    full_path = _resolve_editable(path)
+    chain = _load_chain(full_path)
+    if chain["cursor"] == 0:
+        return {**_chain_state(full_path, chain), "changed": False}
+    chain["cursor"] -= 1
+    _render_chain(full_path, chain)
+    _save_chain(full_path, chain)
+    return {**_chain_state(full_path, chain), "changed": True}
+
+
+@app.post("/api/edit/{path:path}/redo")
+async def edit_redo(path: str):
+    full_path = _resolve_editable(path)
+    chain = _load_chain(full_path)
+    if chain["cursor"] >= len(chain["ops"]):
+        return {**_chain_state(full_path, chain), "changed": False}
+    chain["cursor"] += 1
+    _render_chain(full_path, chain)
+    _save_chain(full_path, chain)
+    return {**_chain_state(full_path, chain), "changed": True}
+
+
+@app.post("/api/edit/{path:path}/goto")
+async def edit_goto(path: str, body: dict):
+    """Zincirde herhangi bir adıma atla. body: { cursor: int } (0 = temel görüntü)."""
+    full_path = _resolve_editable(path)
+    chain = _load_chain(full_path)
+    try:
+        target = int(body.get("cursor", chain["cursor"]))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Geçersiz adım numarası")
+    target = max(0, min(target, len(chain["ops"])))
+    if target == chain["cursor"]:
+        return {**_chain_state(full_path, chain), "changed": False}
+    chain["cursor"] = target
+    _render_chain(full_path, chain)
+    _save_chain(full_path, chain)
+    return {**_chain_state(full_path, chain), "changed": True}
+
+
 @app.post("/api/edit/{path:path}/revert")
 async def revert_edit(path: str):
-    """Restore original file from .gallery_originals/ backup."""
+    """Restore original file from .gallery_originals/ backup (zinciri de siler)."""
     full_path = find_in_directories(path)
     if not full_path:
         raise HTTPException(404, "Resim bulunamadı")
 
-    backup_path = full_path.parent / '.gallery_originals' / full_path.name
+    backup_path = _original_path(full_path)
     if not backup_path.exists():
         return {"ok": False, "reverted": False, "reason": "Yedek bulunamadı"}
 
     import shutil as _shutil
     _shutil.copy2(backup_path, full_path)
+    _discard_chain(full_path)  # zincir + legacy temel artık geçersiz
     cache_manager.invalidate_thumbnail(str(full_path))
     return {"ok": True, "reverted": True}
 
@@ -1707,97 +2039,40 @@ async def trim_video(path: str, body: dict):
                 pass
 
 
-# NOT: Bu genel route SPESİFİK route'lardan (/revert, /has-backup, /trim) SONRA
-# tanımlanmalı — aksi halde {path:path} greedy olduğu için onları yutar.
+# NOT: Bu genel route SPESİFİK route'lardan (/revert, /has-backup, /trim, /history,
+# /undo, /redo, /goto) SONRA tanımlanmalı — aksi halde {path:path} greedy olduğu
+# için onları yutar.
 @app.post("/api/edit/{path:path}")
 async def edit_image(path: str, body: dict):
-    """Edit image in-place. Backs up original to .gallery_originals/ on first edit."""
-    full_path = find_in_directories(path)
-    if not full_path:
-        raise HTTPException(404, "Resim bulunamadı")
+    """Düzenlemeyi zincire ekle ve görüntüyü temelden yeniden render et (Faz 10).
 
-    # Only allow editing actual image files (not videos)
-    if full_path.suffix.lower() not in {'.jpg', '.jpeg', '.png', '.webp', '.tiff', '.bmp'}:
-        raise HTTPException(400, "Bu dosya türü düzenlenemez")
+    Yıkıcı DEĞİL: dosyanın üstüne üst üste işlem uygulanmaz; zincir her seferinde
+    orijinalden baştan oynatılır. İmleç geride iken yeni işlem gelirse ileri-al
+    kuyruğu (redo) kesilir — klasik undo/redo davranışı.
+    """
+    full_path = _resolve_editable(path)
 
-    # Backup original (only once — first edit)
-    backup_dir = full_path.parent / '.gallery_originals'
-    backup_path = backup_dir / full_path.name
-    if not backup_path.exists():
-        backup_dir.mkdir(exist_ok=True)
-        import shutil as _shutil
-        _shutil.copy2(full_path, backup_path)
+    operation = body.get("operation")
+    params = body.get("params", {})
+    if operation not in {"rotate", "flip", "crop", "adjust", "filter"}:
+        raise HTTPException(400, f"Bilinmeyen operasyon: {operation}")
+
+    chain = _load_chain(full_path)
+    _ensure_base(full_path, chain)  # legacy tespiti YENİ işlem eklenmeden yapılmalı
+
+    chain["ops"] = chain["ops"][:chain["cursor"]]
+    chain["ops"].append({"op": operation, "params": params, "at": int(time.time())})
+    chain["cursor"] = len(chain["ops"])
 
     try:
-        from PIL import Image as _Image, ImageEnhance as _Enhance
-        img = _Image.open(full_path)
-
-        operation = body.get("operation")
-        params = body.get("params", {})
-
-        if operation == "rotate":
-            degrees = float(params.get("degrees", 90))
-            img = img.rotate(-degrees, expand=True, resample=_Image.BICUBIC)
-        elif operation == "flip":
-            direction = params.get("direction", "horizontal")
-            if direction == "horizontal":
-                img = img.transpose(_Image.FLIP_LEFT_RIGHT)
-            elif direction == "vertical":
-                img = img.transpose(_Image.FLIP_TOP_BOTTOM)
-            else:
-                raise HTTPException(400, f"Bilinmeyen çevirme yönü: {direction}")
-        elif operation == "crop":
-            x = int(params.get("x", 0))
-            y = int(params.get("y", 0))
-            w = int(params.get("w", img.width))
-            h = int(params.get("h", img.height))
-            # Clamp to image bounds
-            x = max(0, min(x, img.width))
-            y = max(0, min(y, img.height))
-            x2 = min(x + w, img.width)
-            y2 = min(y + h, img.height)
-            if x2 <= x or y2 <= y:
-                raise HTTPException(400, "Geçersiz kırpma alanı")
-            img = img.crop((x, y, x2, y2))
-        elif operation == "adjust":
-            brightness = float(params.get("brightness", 1.0))
-            contrast = float(params.get("contrast", 1.0))
-            saturation = float(params.get("saturation", 1.0))
-            sharpness = float(params.get("sharpness", 1.0))
-            temperature = float(params.get("temperature", 0.0))
-            gamma = float(params.get("gamma", 1.0))
-            if brightness != 1.0:
-                img = _Enhance.Brightness(img).enhance(brightness)
-            if contrast != 1.0:
-                img = _Enhance.Contrast(img).enhance(contrast)
-            if saturation != 1.0:
-                img = _Enhance.Color(img).enhance(saturation)
-            if sharpness != 1.0:
-                img = _Enhance.Sharpness(img).enhance(sharpness)
-            if temperature != 0.0:
-                img = _apply_temperature(img, temperature)
-            if gamma != 1.0:
-                img = _apply_gamma(img, gamma)
-        elif operation == "filter":
-            preset = params.get("preset", "")
-            img = _apply_filter_preset(img, preset)
-        else:
-            raise HTTPException(400, f"Bilinmeyen operasyon: {operation}")
-
-        # Save — keep original format, use quality=92 for lossy
-        save_kwargs = {}
-        fmt = img.format or full_path.suffix.lstrip('.').upper()
-        if fmt in ('JPEG', 'JPG'):
-            fmt = 'JPEG'
-            save_kwargs['quality'] = 92
-            save_kwargs['subsampling'] = 0
-        img.save(full_path, format=fmt, **save_kwargs)
-        cache_manager.invalidate_thumbnail(str(full_path))
-        return {"ok": True, "has_backup": True}
+        _render_chain(full_path, chain)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(500, f"Düzenleme hatası: {e}")
+
+    _save_chain(full_path, chain)
+    return {**_chain_state(full_path, chain), "has_backup": True}
 
 
 # ──────────────────────────────────────────────

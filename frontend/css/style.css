@@ -1955,6 +1955,85 @@ body.light {
     color: var(--accent);
 }
 
+/* ========== Faz 10 — Non-destructive düzenleme geçmişi ========== */
+.edit-sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--border-subtle);
+    margin: 0 2px;
+}
+
+.edit-btn:disabled {
+    cursor: not-allowed;
+    color: var(--text-secondary);
+}
+
+.edit-btn:disabled:hover {
+    border-color: var(--border-subtle);
+    color: var(--text-secondary);
+}
+
+.history-panel { min-width: 260px; max-width: 320px; }
+
+.history-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+
+.history-hint {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+}
+
+.history-list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 44vh;
+    overflow-y: auto;
+}
+
+.history-item {
+    padding: 7px 10px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-item:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.history-item--current {
+    border-left-color: var(--accent);
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--accent);
+}
+
+/* İleri-al kuyruğundaki (henüz uygulanmamış) adımlar */
+.history-item--undone {
+    opacity: 0.45;
+    font-style: italic;
+}
+
 /* Video trim */
 .trim-panel { min-width: 300px; }
 

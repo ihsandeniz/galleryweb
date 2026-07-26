@@ -1,8 +1,11 @@
-// GalleryWeb Service Worker — v2
+// GalleryWeb Service Worker — v3
 // v1 index.html'i Cache-First sunuyordu → yeni ?v= sürümleri kullanıcıya hiç
 // ulaşmıyordu. v2: HTML/navigasyon Network-First (online'da hep taze),
 // statikler Stale-While-Revalidate (offline çalışır + arka planda güncellenir).
-const STATIC_CACHE = 'gallery-static-v2';
+// v3: yerel modun `/yerel/api/...` çağrıları API kuralına takılmıyordu → API
+// yanıtları statik cache'e yazılıp BAYAT sunuluyordu. Cache adı da yükseltildi ki
+// zehirlenmiş eski kayıtlar activate'te silinsin.
+const STATIC_CACHE = 'gallery-static-v3';
 const THUMB_CACHE  = 'gallery-thumbs-v1';
 
 const STATIC_ASSETS = [
@@ -48,15 +51,23 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // API data — Network First (always fresh)
-    if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/thumbnail') && !url.pathname.startsWith('/api/image')) {
-        event.respondWith(networkFirst(event.request));
+    // Yerel mod tüm API çağrılarını `/yerel/api/...` üzerinden yapar (backend
+    // prefix rewrite ile karşılar). Öneki soymadan yapılan `/api/` kontrolü bu
+    // istekleri KAÇIRIYOR, hepsi aşağıdaki statik SWR dalına düşüyordu → etiket,
+    // puan, çöp kutusu, düzenleme geçmişi gibi veriler cache'ten BAYAT geliyordu.
+    const apiPath = url.pathname.startsWith('/yerel/')
+        ? url.pathname.slice('/yerel'.length)
+        : url.pathname;
+
+    // Thumbnails / images — Stale-While-Revalidate
+    if (apiPath.startsWith('/api/image') || apiPath.startsWith('/api/thumbnail')) {
+        event.respondWith(staleWhileRevalidate(event.request, THUMB_CACHE));
         return;
     }
 
-    // Thumbnails / images — Stale-While-Revalidate
-    if (url.pathname.startsWith('/api/image') || url.pathname.startsWith('/api/thumbnail')) {
-        event.respondWith(staleWhileRevalidate(event.request, THUMB_CACHE));
+    // API data — Network First (always fresh)
+    if (apiPath.startsWith('/api/')) {
+        event.respondWith(networkFirst(event.request));
         return;
     }
 

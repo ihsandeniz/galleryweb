@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photo Gallery Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=26">
+    <link rel="stylesheet" href="/static/css/style.css?v=27">
     <!-- Leaflet (Map) — self-host, CDN'e istek gitmez -->
     <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
     <!-- PWA -->
@@ -477,6 +477,10 @@
             <button class="edit-btn" id="editCropBtn"    title="Kırp">✂ Kırp</button>
             <button class="edit-btn" id="editAdjustBtn"  title="Işık / Renk / Keskinlik">☀ Ayarla</button>
             <button class="edit-btn" id="editFilterBtn"  title="Hazır Filtreler">✦ Filtre</button>
+            <span class="edit-sep"></span>
+            <button class="edit-btn" id="editUndoBtn"    title="Geri Al (Ctrl+Z)" disabled>↶</button>
+            <button class="edit-btn" id="editRedoBtn"    title="İleri Al (Ctrl+Shift+Z)" disabled>↷</button>
+            <button class="edit-btn" id="editHistoryBtn" title="Düzenleme Geçmişi">🕘 Geçmiş</button>
             <button class="edit-btn edit-btn--revert" id="editRevertBtn" title="Orijinale Dön">↩ Orijinal</button>
             <button class="edit-btn edit-btn--close" id="closeEditToolbarBtn" title="Düzenlemeyi Kapat">✕</button>
         </div>
@@ -524,6 +528,18 @@
             </div>
             <div class="adjust-actions">
                 <button id="filterCancelBtn" class="btn-icon">Kapat</button>
+            </div>
+        </div>
+
+        <!-- Düzenleme Geçmişi (Faz 10 — non-destructive zincir) -->
+        <div id="historyPanel" class="adjust-panel history-panel hidden">
+            <div class="history-head">
+                <strong>Düzenleme Geçmişi</strong>
+                <span id="historyHint" class="history-hint">orijinal korunur</span>
+            </div>
+            <ol id="historyList" class="history-list"></ol>
+            <div class="adjust-actions">
+                <button id="historyCloseBtn" class="btn-icon">Kapat</button>
             </div>
         </div>
 
@@ -906,8 +922,8 @@
         }
     });
     </script>
-    <script src="/static/js/gallery.js?v=24"></script>
-    <script src="/static/js/keybinds.js?v=20"></script>
+    <script src="/static/js/gallery.js?v=25"></script>
+    <script src="/static/js/keybinds.js?v=21"></script>
     <script src="/static/js/slideshow.js?v=18"></script>
     <script src="/static/js/search.js?v=2"></script>
 </body>
