@@ -63,7 +63,7 @@ class ThumbnailGenerator:
         yazılır — 0 baytlık dosya her istekte yeniden çözülmeye çalışılmaz.
         """
         if original_path.suffix.lower() in VIDEO_FORMATS:
-            return await self._get_video_thumbnail(original_path), True
+            return await self._get_video_thumbnail(original_path)
 
         thumb_path = self._generate_thumb_path(original_path, size)
         cache_key = self._cache_key(original_path, size)
@@ -101,10 +101,17 @@ class ThumbnailGenerator:
 
         return thumb_path, bool(ok)
 
-    async def _get_video_thumbnail(self, video_path: Path) -> Path:
+    async def _get_video_thumbnail(self, video_path: Path) -> tuple[Path, bool]:
+        """Videonun poster karesi. ffmpeg yoksa veya kare alınamazsa yer tutucu.
+
+        Eskiden ffmpeg bulunamayınca var olmayan dosya yolu döndürülüyordu ve
+        istek 500 veriyordu — Windows'ta ffmpeg varsayılan kurulu OLMADIĞI için
+        oradaki her video kutucuğu bozuk görünürdü.
+        """
         thumb_path = self._generate_thumb_path(video_path)
         if thumb_path.exists():
-            return thumb_path
+            return thumb_path, not self._bad_marker(thumb_path).exists()
+
         if shutil.which('ffmpeg'):
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
@@ -113,7 +120,10 @@ class ThumbnailGenerator:
                 video_path,
                 thumb_path
             )
-        return thumb_path
+        if not thumb_path.exists():
+            self._write_placeholder(thumb_path, self.thumb_size, video=True)
+            return thumb_path, False
+        return thumb_path, True
 
     @staticmethod
     def _ffmpeg_thumb(video_path: Path, thumb_path: Path):
@@ -133,8 +143,12 @@ class ThumbnailGenerator:
         return thumb_path.with_name(thumb_path.name + ".bad")
 
     @staticmethod
-    def _write_placeholder(thumb_path: Path, thumb_size: tuple):
-        """Okunamayan dosya için 'bozuk' yer tutucusu: koyu zemin + uyarı üçgeni.
+    def _write_placeholder(thumb_path: Path, thumb_size: tuple, video: bool = False):
+        """Önizlemesi üretilemeyen dosya için yer tutucu görsel.
+
+        `video=False` → uyarı üçgeni (bozuk/okunamayan dosya)
+        `video=True`  → film şeridi + oynat üçgeni (poster karesi alınamadı;
+                        genelde ffmpeg kurulu değil — Windows'ta varsayılan durum)
 
         Yazı tipi gerektirmez (paketlenmiş uygulamada font garantisi yok) — sadece
         geometrik şekiller.
@@ -143,11 +157,21 @@ class ThumbnailGenerator:
         w = h = max(64, min(thumb_size[0], 512))
         img = Image.new("RGB", (w, h), (26, 26, 30))
         d = ImageDraw.Draw(img)
-        m = w * 0.22
-        d.polygon([(w / 2, m), (w - m, h - m), (m, h - m)], outline=(200, 90, 90), width=max(2, w // 90))
-        d.line([(w / 2, h * 0.42), (w / 2, h * 0.62)], fill=(200, 90, 90), width=max(2, w // 70))
-        d.ellipse([w / 2 - w * 0.018, h * 0.68, w / 2 + w * 0.018, h * 0.68 + w * 0.036],
-                  fill=(200, 90, 90))
+        if video:
+            renk = (120, 160, 200)
+            kalinlik = max(2, w // 90)
+            d.rectangle([w * 0.18, h * 0.28, w * 0.82, h * 0.72], outline=renk, width=kalinlik)
+            for i in range(4):  # film şeridi delikleri
+                y = h * (0.34 + i * 0.11)
+                d.rectangle([w * 0.21, y, w * 0.25, y + h * 0.05], outline=renk, width=1)
+                d.rectangle([w * 0.75, y, w * 0.79, y + h * 0.05], outline=renk, width=1)
+            d.polygon([(w * 0.44, h * 0.40), (w * 0.62, h * 0.50), (w * 0.44, h * 0.60)], fill=renk)
+        else:
+            m = w * 0.22
+            d.polygon([(w / 2, m), (w - m, h - m), (m, h - m)], outline=(200, 90, 90), width=max(2, w // 90))
+            d.line([(w / 2, h * 0.42), (w / 2, h * 0.62)], fill=(200, 90, 90), width=max(2, w // 70))
+            d.ellipse([w / 2 - w * 0.018, h * 0.68, w / 2 + w * 0.018, h * 0.68 + w * 0.036],
+                      fill=(200, 90, 90))
         thumb_path.parent.mkdir(parents=True, exist_ok=True)
         img.save(thumb_path, "WEBP", quality=80)
         try:
