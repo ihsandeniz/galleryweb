@@ -47,15 +47,18 @@ if _env_origins:
     # zaten yasak + kullanıcı verisini her origin'e açar. "*" gelirse güvenli
     # localhost varsayılanına düş ve uyar. (SEC-F003)
     if "*" in _origins:
-        print("⚠️  ALLOWED_ORIGINS='*' güvensiz — localhost varsayılanına dönülüyor.")
+        print("⚠️  ALLOWED_ORIGINS='*' güvensiz — localhost varsayılanına dönülüyor.", flush=True)
         _origins = [f"http://127.0.0.1:{_PORT}", f"http://localhost:{_PORT}"]
         if _local_ip:
             _origins.append(f"http://{_local_ip}:{_PORT}")
 else:
     _origins = [f"http://127.0.0.1:{_PORT}", f"http://localhost:{_PORT}"]
     if _local_ip:
+        # LAN adresi CORS'ta izinli kalır (ağ erişimi açıldığında gerekiyor), ama
+        # "Telefon erişimi" satırı ARTIK BURADA YAZILMIYOR: sunucu varsayılan
+        # olarak yalnız 127.0.0.1 dinliyor, o adres çalışmıyor. Yanıltıcıydı.
+        # Gerçekten ağa açıldığında __main__ bloğu yazdırır.
         _origins.append(f"http://{_local_ip}:{_PORT}")
-        print(f"📱 Telefon erişimi: http://{_local_ip}:{_PORT}")
 
 def _user_data_dir() -> Path:
     """Yazılabilir kullanıcı veri dizini (masaüstü paketi için).
@@ -2242,10 +2245,28 @@ if __name__ == "__main__":
     # reload = geliştirici modu (dosya izler, süreci ikiye katlar). Son kullanıcıda
     # kapalı olmalı — hızlı başlar, az RAM. Geliştirirken: GALLERYWEB_DEV=1 python main.py
     _dev = os.getenv("GALLERYWEB_DEV") == "1"
-    # HOST varsayılan 0.0.0.0 (telefon/aynı-ağ erişimi için). Tek makineye kısıtlamak
-    # için HOST=127.0.0.1 (README güvenlik notu — yerel modda auth yok).
-    # Masaüstü paketinde Tauri kabuğu HOST=127.0.0.1 geçer.
-    _host = os.getenv("HOST", "0.0.0.0")
+    # GÜVENLİ VARSAYILAN: yalnız bu makine.
+    #
+    # Eskiden varsayılan 0.0.0.0'dı; yerel modda GİRİŞ/PAROLA OLMADIĞI için bu,
+    # `python main.py` diyen herkesin galerisini sessizce tüm Wi-Fi'a açıyordu
+    # (aynı ağdaki herkes fotoğrafları okuyabilir, etiketleyebilir, SİLEBİLİR).
+    # Ağa açmak artık bilinçli bir tercih:
+    #     GALLERYWEB_LAN=1 python main.py      → telefon/aynı-ağ erişimi
+    #     HOST=0.0.0.0     python main.py      → aynısı (açık biçim)
+    if os.getenv("GALLERYWEB_LAN") == "1":
+        _host = os.getenv("HOST", "0.0.0.0")
+    else:
+        _host = os.getenv("HOST", "127.0.0.1")
+
+    if _host not in ("127.0.0.1", "localhost", "::1"):
+        # flush=True ŞART: çıktı bir dosyaya/boruya yönlendirildiğinde (run.sh
+        # logu, masaüstü kabuğu, docker) stdout blok-tamponlu olur ve bu uyarı
+        # kullanıcıya HİÇ ulaşmaz — uvicorn'un kendi logları stderr'den geldiği
+        # için sorun fark edilmiyordu.
+        print("⚠️  Sunucu AĞA AÇIK bağlanıyor ve yerel modda giriş/parola YOKTUR —", flush=True)
+        print("   aynı ağdaki herkes fotoğraflarınızı görebilir ve silebilir.", flush=True)
+        if _local_ip:
+            print(f"📱 Telefon erişimi: http://{_local_ip}:{_PORT}", flush=True)
     if _FROZEN:
         # Paketlenmiş binary'de "main:app" import-string'i çözülemez; app nesnesini
         # doğrudan ver. reload zaten son kullanıcıda kapalı olmalı.
