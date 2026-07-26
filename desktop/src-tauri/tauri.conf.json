@@ -22,9 +22,6 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
-    "resources": {
-      "../dist/galleryweb-server": "galleryweb-server"
-    },
     "linux": {
       "appimage": {
         "bundleMediaFramework": true
