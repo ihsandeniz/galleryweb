@@ -18,6 +18,7 @@ import os
 import sys
 import time
 import socket
+import subprocess
 from pathlib import Path
 from typing import List, Dict
 import asyncio
@@ -1546,7 +1547,14 @@ async def get_qr_url():
 # kullanıcının bilinçli tercihi. Tercih kullanıcı veri dizininde saklanır ki
 # uygulama yeniden açıldığında da geçerli olsun.
 
-_ag_tercihi = CACHE_DIR.parent / "network.json"
+# Ayar dosyası nereye yazılsın?
+#   • paketlenmiş uygulama / GALLERYWEB_DATA_DIR verilmişse → kullanıcı veri dizini
+#   • kaynaktan çalışırken                                  → repo içindeki cache/
+# Eskiden CACHE_DIR.parent'tı; kaynaktan çalışırken bu REPO KÖKÜ demek — tercih
+# dosyası git'in görüntüsüne düşüyordu. Üstelik GALLERYWEB_DATA_DIR yalnız paketli
+# modda dikkate alındığı için testler birbirinin tercihini eziyordu.
+_ayar_dir = _user_data_dir() if (_FROZEN or os.getenv("GALLERYWEB_DATA_DIR")) else CACHE_DIR
+_ag_tercihi = _ayar_dir / "network.json"
 
 
 def _lan_tercihi_oku() -> bool:
@@ -1575,6 +1583,69 @@ def _lan_acik() -> bool:
 _calisan_host: dict = {"host": "127.0.0.1", "server": None, "yeniden_baglan": None}
 
 
+_guvenlik_duvari_onbellek: dict = {}
+
+
+def _guvenlik_duvari() -> dict:
+    """Makinede aktif bir güvenlik duvarı var mı — ve varsa portu nasıl açılır?
+
+    Bu KESİN bir "engelliyor" yargısı değildir: root olmadan kural tablosu
+    okunamaz, yalnız servisin aktifliğine bakılır. Amaç şu tuzağı kapatmak:
+    kullanıcı telefon erişimini açıyor, sunucu gerçekten 0.0.0.0'ı dinliyor,
+    ama güvenlik duvarının varsayılan `drop` politikası paketi düşürüyor —
+    telefonda görünen tek şey sessiz bir "bağlantı zaman aşımı" oluyor.
+    """
+    if sys.platform != "linux":
+        return {"aktif": False}
+    if _guvenlik_duvari_onbellek:
+        return _guvenlik_duvari_onbellek
+
+    def _servis(servis: str, alt: str) -> str:
+        try:
+            r = subprocess.run(["systemctl", alt, servis],
+                               capture_output=True, text=True, timeout=3)
+            return r.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+
+    # `is-active` TEK BAŞINA yetmez: nftables.service kuralları yükleyip çıkan bir
+    # oneshot servistir, kurallar yürürlükteyken bile "inactive" görünür (bu tam
+    # olarak ihsan'ın makinesinde yaşandı — sunucu doğru dinliyordu, paket düşüyordu).
+    # Bu yüzden `is-enabled` birincil sinyal; ikisi de bilgi vermezse kurulu
+    # araca bakıp yine de yol gösteriyoruz.
+    aktif = None
+    for servis in ("firewalld", "ufw", "nftables", "iptables"):
+        if _servis(servis, "is-enabled") == "enabled" or _servis(servis, "is-active") == "active":
+            aktif = servis
+            break
+
+    if not aktif:
+        from shutil import which
+        for servis, arac in (("firewalld", "firewall-cmd"), ("ufw", "ufw"),
+                             ("nftables", "nft"), ("iptables", "iptables")):
+            if which(arac):
+                aktif = servis
+                break
+
+    if not aktif:
+        _guvenlik_duvari_onbellek.update({"aktif": False})
+        return _guvenlik_duvari_onbellek
+
+    agi = ".".join(_local_ip.split(".")[:3]) + ".0/24" if _local_ip else "192.168.1.0/24"
+    komutlar = {
+        "firewalld": f"sudo firewall-cmd --permanent --add-port={_PORT}/tcp && sudo firewall-cmd --reload",
+        "ufw": f"sudo ufw allow from {agi} to any port {_PORT} proto tcp",
+        "nftables": f"ip saddr {agi} tcp dport {_PORT} accept   # /etc/nftables.conf içindeki input zincirine ekleyin",
+        "iptables": f"sudo iptables -A INPUT -s {agi} -p tcp --dport {_PORT} -j ACCEPT",
+    }
+    _guvenlik_duvari_onbellek.update({
+        "aktif": True,
+        "tur": aktif,
+        "komut": komutlar[aktif],
+    })
+    return _guvenlik_duvari_onbellek
+
+
 @app.get("/api/network")
 async def ag_durumu():
     return {
@@ -1583,6 +1654,7 @@ async def ag_durumu():
         "port": _PORT,
         "url": f"http://{_local_ip}:{_PORT}" if (_lan_acik() and _local_ip) else None,
         "degistirilebilir": _calisan_host.get("yeniden_baglan") is not None,
+        "guvenlik_duvari": _guvenlik_duvari(),
     }
 
 
@@ -2374,7 +2446,15 @@ if __name__ == "__main__":
         while True:
             _bind_uyarisi(_calisan_host["host"])
             _sunucu = uvicorn.Server(uvicorn.Config(
-                app, host=_calisan_host["host"], port=_PORT, log_level="info"))
+                app, host=_calisan_host["host"], port=_PORT, log_level="info",
+                # `/api/watch` HİÇ BİTMEYEN bir SSE akışıdır (istemci kapatana
+                # kadar sürer). Zarif kapanış açık bağlantıları beklediği için,
+                # galeri açıkken telefon erişimi anahtarı çevrildiğinde sunucu
+                # "Waiting for connections to close." diyip SONSUZA KADAR asılı
+                # kalıyordu — yani yeniden bağlanma hiç gerçekleşmiyordu.
+                # (curl ile test edildiğinde uzun-bağlantı olmadığı için sorun
+                # görünmüyordu.) Kısa bir tavan koyup akışı zorla kapatıyoruz.
+                timeout_graceful_shutdown=3))
             _calisan_host["server"] = _sunucu
             _sunucu.run()  # should_exit olana kadar bloklar
 

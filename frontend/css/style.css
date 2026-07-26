@@ -2720,3 +2720,44 @@ kbd {
     line-height: 1.45;
     color: #f59e0b;
 }
+
+.lan-firewall {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lan-firewall p {
+    margin: 0 0 6px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-secondary, #9ca3af);
+}
+
+.lan-firewall code {
+    display: block;
+    padding: 6px 8px;
+    font-size: 10.5px;
+    line-height: 1.4;
+    word-break: break-all;
+    white-space: pre-wrap;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 6px;
+    color: #67e8f9;
+}
+
+.btn-mini {
+    margin-top: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary, #9ca3af);
+    cursor: pointer;
+}
+
+.btn-mini:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.35);
+}

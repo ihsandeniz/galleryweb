@@ -412,6 +412,13 @@ async function init() {
     elements.qrBtn.addEventListener('click', showQRModal);
     const _lanToggle = document.getElementById('lanToggle');
     if (_lanToggle) _lanToggle.addEventListener('change', e => toggleLan(e.target.checked));
+    const _lanFwCopy = document.getElementById('lanFwCopyBtn');
+    if (_lanFwCopy) _lanFwCopy.addEventListener('click', () => {
+        const cmd = document.getElementById('lanFwCmd')?.textContent || '';
+        navigator.clipboard.writeText(cmd)
+            .then(() => showToast('Komut kopyalandı', 'success'))
+            .catch(() => showToast('Kopyalanamadı', 'error'));
+    });
     elements.closeQrBtn.addEventListener('click', closeQRModal);
     elements.qrBackdrop.addEventListener('click', closeQRModal);
     elements.copyQrUrlBtn.addEventListener('click', () => {
@@ -1591,6 +1598,17 @@ async function refreshLanBox() {
         if (!d.lan) {
             elements.qrUrlText.textContent =
                 'Telefon erişimi kapalı — açmak için aşağıdaki kutuyu işaretleyin.';
+        }
+        // Sunucu doğru adresi dinlese bile güvenlik duvarı paketi düşürebilir;
+        // o durumda telefonda görünen tek şey sessiz bir zaman aşımı olur.
+        const fwBox = document.getElementById('lanFirewall');
+        const fw = d.guvenlik_duvari;
+        if (fwBox && d.lan && fw && fw.aktif) {
+            document.getElementById('lanFwKind').textContent = fw.tur;
+            document.getElementById('lanFwCmd').textContent = fw.komut;
+            fwBox.classList.remove('hidden');
+        } else if (fwBox) {
+            fwBox.classList.add('hidden');
         }
     } catch (e) {
         console.error('Ağ durumu okunamadı', e);
