@@ -66,9 +66,13 @@ fn resolve_server_binary(app: &tauri::AppHandle) -> Option<PathBuf> {
         }
     }
     if let Ok(dir) = app.path().resource_dir() {
-        let p = dir.join(name);
-        if p.is_file() {
-            return Some(p);
+        // Düz ad (tauri.conf.json'daki eşleme) + Tauri'nin üst-dizin kaynakları için
+        // ürettiği `_up_/…` düzeni. İkincisi olmadan, dist/ klasörü duran GELİŞTİRME
+        // makinesinde sorun görünmüyor ama temiz kurulumda uygulama açılmıyordu.
+        for aday in [dir.join(name), dir.join("_up_").join("dist").join(name)] {
+            if aday.is_file() {
+                return Some(aday);
+            }
         }
     }
     // Geliştirme: src-tauri/target/... yerine repo içindeki dist/
@@ -91,7 +95,30 @@ fn wait_for_server(port: u16, timeout: Duration) -> bool {
     false
 }
 
+/// Linux'ta WebKitGTK'nın DMABUF render yolu, bazı sürücülerde (özellikle NVIDIA +
+/// Wayland) tampon ayıramıyor — pencere açılıyor ama İÇİ BOŞ/SİYAH kalıyor. Log'da
+/// `Failed to create GBM buffer of size WxH` satırı görünür.
+///
+/// Bu, uygulamanın kendi sorunu değil ama kullanıcıdan ortam değişkeni ayarlamasını
+/// bekleyemeyiz; güvenli olan yazılımsal yolu varsayılan yapıyoruz. GPU yolunu
+/// denemek isteyen `GALLERYWEB_GPU=1` ile bunu kapatabilir.
+#[cfg(target_os = "linux")]
+fn linux_render_gecici_cozumu() {
+    if std::env::var_os("GALLERYWEB_GPU").is_some() {
+        return;
+    }
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_render_gecici_cozumu() {}
+
 fn main() {
+    // GTK/WebKit başlatılmadan ÖNCE ayarlanmalı.
+    linux_render_gecici_cozumu();
+
     tauri::Builder::default()
         .manage(ServerProcess(Mutex::new(None)))
         .setup(|app| {

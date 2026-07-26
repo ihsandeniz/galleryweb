@@ -22,7 +22,9 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
-    "resources": ["../dist/galleryweb-server"],
+    "resources": {
+      "../dist/galleryweb-server": "galleryweb-server"
+    },
     "category": "Photography",
     "shortDescription": "Yerel fotoğraf galerisi",
     "longDescription": "GalleryWeb — bilgisayarındaki fotoğraf ve videoları tarayan, etiketleyen ve düzenleyen yerel galeri uygulaması. İnternet bağlantısı gerektirmez, hiçbir veri dışarı gönderilmez."

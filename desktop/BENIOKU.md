@@ -86,7 +86,13 @@ Sanal ekranda (Xvfb) uçtan uca test — senin masaüstünü etkilemez:
 
 Üretilen AppImage, son kullanıcı gibi (kurulum yapmadan, temiz veri dizeniyle) ayrıca denendi:
 çalıştı · gömülü sunucu kalktı · HTTP 200 · webview galeriyi yükledi · gerçek klasörden 7 dosya
-listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalmadı (7/7).
+listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalmadı.
+
+> **Testin kendisinde bulunan tuzak:** paket testleri geliştirme makinesinde koşarken
+> `desktop/dist/` klasörü de duruyor. Kod önce paket içindeki kaynağa, bulamazsa bu
+> geliştirme yoluna düşüyordu — yani paketleme bozuk olsa bile test GEÇİYORDU. Artık
+> doğrulama, `dist/` klasörü geçici olarak saklanarak yapılıyor; çalışan sürecin yolu
+> `/tmp/.mount_…/usr/lib/GalleryWeb/galleryweb-server` olarak teyit ediliyor.
 
 > **Not:** Doğrulamalar başsız (headless) sanal ekranda yapıldı; pencere içeriğinin
 > piksel görüntüsü alınamadı (X sunucusunda pencere yöneticisi yok). Arayüzün kendisi
