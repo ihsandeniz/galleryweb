@@ -1955,6 +1955,17 @@ body.light {
     color: var(--accent);
 }
 
+/* Okunamayan dosya kutucuğu — parlama durur, sebebi belli olur */
+.gallery-item.thumb-error {
+    outline: 1px solid rgba(200, 90, 90, 0.35);
+    outline-offset: -1px;
+}
+
+.gallery-item.thumb-error img {
+    background: #1a1a1e;
+    animation: none;
+}
+
 /* ========== Faz 10 — Non-destructive düzenleme geçmişi ========== */
 .edit-sep {
     width: 1px;

@@ -1879,6 +1879,15 @@ function buildGalleryItem(imagePath, index) {
     img.alt = imagePath.split('/').pop();
 
     img.addEventListener('load', () => img.classList.remove('loading'));
+    // `error` dinleyicisi OLMADAN, yüklenemeyen bir küçük resim `loading` sınıfını
+    // üzerinde tutuyor ve kutucuk sonsuza kadar parlıyordu — kullanıcı galeriyi
+    // "yükleniyorda kalmış" sanıyordu. Sunucu bozuk dosyalar için artık yer tutucu
+    // döndürüyor; bu dinleyici ağ/erişim hataları için son güvenlik ağı.
+    img.addEventListener('error', () => {
+        img.classList.remove('loading');
+        item.classList.add('thumb-error');
+        item.title = 'Bu dosya okunamadı (bozuk veya desteklenmeyen)';
+    });
     item.addEventListener('click', () => {
         if (state.selectMode) { toggleItemSelection(item, imagePath); return; }
         openLightbox(index);

@@ -583,8 +583,12 @@ async def serve_image(path: str, thumb: bool = False, w: int = 300):
 
     if thumb:
         size = max(100, min(800, w))
-        thumb_path = await thumbnail_gen.get_thumbnail(full_path, size=size)
-        return FileResponse(thumb_path)
+        thumb_path, okunabildi = await thumbnail_gen.get_thumbnail_ex(full_path, size=size)
+        # Okunamayan dosya için 500 DÖNMÜYORUZ: yer tutucu görsel + bilgilendirici
+        # başlık. Aksi halde tek bozuk dosya galeri kutucuğunu sonsuza kadar
+        # "yükleniyor" durumunda bırakıyordu.
+        return FileResponse(thumb_path,
+                            headers={"X-Thumb-Status": "ok" if okunabildi else "unreadable"})
     return FileResponse(full_path)
 
 
