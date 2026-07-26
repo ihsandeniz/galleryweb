@@ -105,6 +105,31 @@ listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalma
 | `.deb` | 54 MB | Sistem GTK/WebKit'ini kullanır |
 | `.AppImage` | 147 MB | GTK/WebKit'i de içine alır — hiçbir bağımlılık istemez |
 
+## Video oynatma (AppImage)
+
+WebKit videoları GStreamer ile oynatır. AppImage varsayılan olarak yalnızca
+GStreamer'ın **çekirdek kütüphanelerini** alıyor, **eklentilerini** almıyordu →
+`GStreamer element appsink/autoaudiosink not found` + ardından NULL işaretçi
+kritiği ile WebProcess çöküyor, yani pencere komple gidiyordu.
+
+`bundleMediaFramework` açıldı; pakette artık 194 GStreamer eklentisi var
+(`libgstapp.so`, `libgstautodetect.so` dahil). Bu eklentiyi çalıştıran
+linuxdeploy betiği **`patchelf` ister** — yoksa AppImage adımı tümden çöker,
+`yap.sh` bunu baştan söyler.
+
+Video **poster kareleri** ayrı bir yoldur (sunucu tarafında `ffmpeg`), her
+zaman çalışır; ffmpeg pakete gömülmez, sistemden kullanılır.
+
+## Ölçek
+
+600 üretilmiş fotoğrafla sunucu stres testi (1800 küçük resim isteği, 48'e kadar
+eşzamanlı): **600/600 başarılı, tek hata yok**, sunucu ayakta, ~850 MB tepe RSS.
+9.549 fotoğrafluk gerçek arşivde listeleme: sayfa başına 50 kayıt, 6.5 KB yanıt,
+0.76 s, 76 MB RSS. Ön yüz 9.549 fotoğrafta sayfa sayfa gezildi ve `per_page=500`
+zorlandı: JS yığını 10 MB'de sabit, kart sayısı sayfa başına sınırlı, çökme yok.
+Yani "çok resim" tek başına çökme sebebi değil — çökmenin kaynağı yukarıdaki
+GStreamer eksikliğiydi.
+
 ## Bilinen tuzak
 
 AppImage adımı `linuxdeploy` içindeki eski `strip` yüzünden modern dağıtımlarda
