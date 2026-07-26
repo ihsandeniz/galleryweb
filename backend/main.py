@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import sys
 import time
 import socket
 from pathlib import Path
@@ -56,9 +57,36 @@ else:
         _origins.append(f"http://{_local_ip}:{_PORT}")
         print(f"📱 Telefon erişimi: http://{_local_ip}:{_PORT}")
 
-BASE_DIR = Path(__file__).parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
-CACHE_DIR = BASE_DIR / "cache"
+def _user_data_dir() -> Path:
+    """Yazılabilir kullanıcı veri dizini (masaüstü paketi için).
+
+    Paketlenmiş uygulamada program dosyaları salt-okunur geçici bir dizinde açılır;
+    thumbnail cache'i oraya yazamayız. Platform standardına göre kalıcı bir yer seç.
+    `GALLERYWEB_DATA_DIR` ile dışarıdan (Tauri kabuğu) ezilebilir.
+    """
+    override = os.getenv("GALLERYWEB_DATA_DIR")
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt":
+        root = os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    else:
+        root = os.getenv("XDG_DATA_HOME") or (Path.home() / ".local" / "share")
+    return Path(root) / "GalleryWeb"
+
+
+# PyInstaller ile paketlendiğinde kaynaklar `sys._MEIPASS` altında açılır.
+_FROZEN = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+if _FROZEN:
+    BASE_DIR = Path(sys._MEIPASS)          # salt-okunur: frontend varlıkları
+    FRONTEND_DIR = BASE_DIR / "frontend"
+    CACHE_DIR = _user_data_dir() / "cache"  # yazılabilir: thumbnail db + önbellek
+else:
+    BASE_DIR = Path(__file__).parent.parent
+    FRONTEND_DIR = BASE_DIR / "frontend"
+    CACHE_DIR = BASE_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Global state
 current_directories: list[Path] = []   # Faz 5.2 — multi-folder support
@@ -2105,12 +2133,47 @@ async def get_service_worker():
     return FR(str(sw_path), media_type="application/javascript")
 
 
+def _start_parent_watchdog() -> None:
+    """Masaüstü kabuğu ölürse sunucuyu da kapat (öksüz süreç bırakma).
+
+    Kabuk, sunucuyu stdin'i bir boruya (pipe) bağlı olarak başlatır ve o borudan
+    hiçbir şey yazmaz. Kabuk hangi sebeple olursa olsun (kapanma, çökme, SIGKILL)
+    sonlanınca borunun yazma ucu kapanır → burada EOF okuruz → çıkarız.
+
+    Sinyal iletmeye göre üstünlüğü: SIGKILL edilen bir ebeveyn sinyali
+    iletemez ve PyInstaller tek-dosya paketinde asıl Python süreci
+    bootloader'ın ÇOCUĞUDUR — sinyal tabanlı temizlik onu ıskalıyordu.
+    Bu yöntem Windows/macOS/Linux'ta aynı çalışır.
+    """
+    def _watch():
+        try:
+            while sys.stdin.buffer.read(1):
+                pass  # kabuk bir şey yazmaz; yazarsa da yoksay
+        except Exception:
+            pass
+        os._exit(0)
+
+    import threading
+    threading.Thread(target=_watch, daemon=True, name="parent-watchdog").start()
+
+
 if __name__ == "__main__":
     import uvicorn
+
+    # Yalnız masaüstü kabuğu altında: stdin borusu kapanınca kendini sonlandır.
+    # Terminalden elle çalıştırmada devrede DEĞİL (stdin kapalıysa anında çıkardı).
+    if os.getenv("GALLERYWEB_DESKTOP") == "1":
+        _start_parent_watchdog()
     # reload = geliştirici modu (dosya izler, süreci ikiye katlar). Son kullanıcıda
     # kapalı olmalı — hızlı başlar, az RAM. Geliştirirken: GALLERYWEB_DEV=1 python main.py
     _dev = os.getenv("GALLERYWEB_DEV") == "1"
     # HOST varsayılan 0.0.0.0 (telefon/aynı-ağ erişimi için). Tek makineye kısıtlamak
     # için HOST=127.0.0.1 (README güvenlik notu — yerel modda auth yok).
+    # Masaüstü paketinde Tauri kabuğu HOST=127.0.0.1 geçer.
     _host = os.getenv("HOST", "0.0.0.0")
-    uvicorn.run("main:app", host=_host, port=_PORT, reload=_dev, log_level="info")
+    if _FROZEN:
+        # Paketlenmiş binary'de "main:app" import-string'i çözülemez; app nesnesini
+        # doğrudan ver. reload zaten son kullanıcıda kapalı olmalı.
+        uvicorn.run(app, host=_host, port=_PORT, log_level="info")
+    else:
+        uvicorn.run("main:app", host=_host, port=_PORT, reload=_dev, log_level="info")

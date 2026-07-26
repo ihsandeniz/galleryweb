@@ -1,0 +1,7 @@
+# PyInstaller çıktıları
+build/
+dist/
+# Tauri derleme çıktısı
+src-tauri/target/
+# tauri-build tarafından üretilir (derlemede yeniden oluşur)
+src-tauri/gen/schemas/
