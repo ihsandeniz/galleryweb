@@ -2689,3 +2689,34 @@ kbd {
     font-size: 0.72rem;
     color: var(--text-secondary);
 }
+
+/* Telefon (ağ) erişimi anahtarı — QR penceresi */
+.lan-box {
+    width: 100%;
+    margin: 10px 0 4px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    text-align: left;
+}
+
+.lan-box.hidden { display: none; }
+
+.lan-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.lan-toggle input { accent-color: var(--accent); cursor: pointer; }
+.lan-toggle small { color: var(--text-secondary); }
+
+.lan-warn {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #f59e0b;
+}

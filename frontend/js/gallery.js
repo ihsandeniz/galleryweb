@@ -410,6 +410,8 @@ async function init() {
 
     // QR modal
     elements.qrBtn.addEventListener('click', showQRModal);
+    const _lanToggle = document.getElementById('lanToggle');
+    if (_lanToggle) _lanToggle.addEventListener('change', e => toggleLan(e.target.checked));
     elements.closeQrBtn.addEventListener('click', closeQRModal);
     elements.qrBackdrop.addEventListener('click', closeQRModal);
     elements.copyQrUrlBtn.addEventListener('click', () => {
@@ -1568,6 +1570,62 @@ async function showQRModal() {
     } catch {
         elements.qrUrlText.textContent = window.location.origin;
         elements.qrImage.src = `${API_BASE}/qr?t=${Date.now()}`;
+    }
+    refreshLanBox();
+}
+
+// ── Telefon (ağ) erişimi anahtarı ──
+//
+// Yerel modda giriş/parola yok, bu yüzden ağ erişimi varsayılan KAPALI. QR kodu
+// eskiden sunucu neye bağlı olursa olsun LAN adresini gösteriyordu; telefon
+// bağlanamıyor, sebebi de görünmüyordu. Artık durum dürüstçe gösteriliyor ve
+// kullanıcı buradan açabiliyor (uygulamayı yeniden başlatmadan).
+async function refreshLanBox() {
+    const box = document.getElementById('lanBox');
+    const toggle = document.getElementById('lanToggle');
+    if (!box || !toggle) return;
+    try {
+        const d = await fetch(`${API_BASE}/network`).then(r => r.json());
+        box.classList.remove('hidden');
+        toggle.checked = !!d.lan;
+        if (!d.lan) {
+            elements.qrUrlText.textContent =
+                'Telefon erişimi kapalı — açmak için aşağıdaki kutuyu işaretleyin.';
+        }
+    } catch (e) {
+        console.error('Ağ durumu okunamadı', e);
+        box.classList.add('hidden');
+    }
+}
+
+async function toggleLan(acik) {
+    const toggle = document.getElementById('lanToggle');
+    try {
+        const res = await fetch(`${API_BASE}/network`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lan: acik }),
+        });
+        const d = await res.json();
+        if (d.restart_required) {
+            showToast('Tercih kaydedildi — uygulamayı yeniden açınca geçerli olacak', 'warning', 5000);
+            return;
+        }
+        // Sunucu yeni adreste yeniden bağlanıyor; kısa bir kesinti olabilir.
+        showToast(acik ? 'Telefon erişimi açılıyor…' : 'Telefon erişimi kapatılıyor…', 'success', 2500);
+        await new Promise(r => setTimeout(r, 1200));
+        const data = await fetch(`${API_BASE}/qr-url`).then(r => r.json()).catch(() => null);
+        if (data) {
+            elements.qrUrlText.textContent = data.lan
+                ? data.url
+                : 'Telefon erişimi kapalı — açmak için aşağıdaki kutuyu işaretleyin.';
+            elements.qrImage.src = `${API_BASE}/qr?t=${Date.now()}`;
+        }
+        refreshLanBox();
+    } catch (e) {
+        console.error('Ağ ayarı değiştirilemedi', e);
+        showToast('Ağ ayarı değiştirilemedi', 'error');
+        if (toggle) toggle.checked = !acik;
     }
 }
 

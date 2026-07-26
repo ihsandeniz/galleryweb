@@ -1524,10 +1524,92 @@ async def get_qr():
 
 @app.get("/api/qr-url")
 async def get_qr_url():
-    port = _PORT
-    if _local_ip:
-        return {"url": f"http://{_local_ip}:{port}", "ip": _local_ip}
-    return {"url": f"http://localhost:{port}", "ip": None}
+    """Telefonun gerçekten bağlanabileceği adres.
+
+    Eskiden sunucu neye bağlı olursa olsun HER ZAMAN LAN adresini döndürüyordu;
+    masaüstü uygulaması yalnız 127.0.0.1 dinlediği için QR kodu çalışmayan bir
+    adrese işaret ediyordu (telefon bağlanamıyor, sebebi görünmüyordu).
+    """
+    if _lan_acik() and _local_ip:
+        return {"url": f"http://{_local_ip}:{_PORT}", "ip": _local_ip, "lan": True}
+    return {
+        "url": f"http://localhost:{_PORT}",
+        "ip": _local_ip,
+        "lan": False,
+        "hint": "Telefon erişimi kapalı — sunucu yalnız bu bilgisayarı dinliyor.",
+    }
+
+
+# ── Ağ (telefon) erişimi — çalışırken açılıp kapanabilir ─────────────────────
+#
+# Yerel modda giriş/parola YOK. Bu yüzden ağ erişimi varsayılan KAPALI ve
+# kullanıcının bilinçli tercihi. Tercih kullanıcı veri dizininde saklanır ki
+# uygulama yeniden açıldığında da geçerli olsun.
+
+_ag_tercihi = CACHE_DIR.parent / "network.json"
+
+
+def _lan_tercihi_oku() -> bool:
+    if os.getenv("GALLERYWEB_LAN") == "1":
+        return True
+    try:
+        return bool(json.loads(_ag_tercihi.read_text()).get("lan"))
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _lan_tercihi_yaz(acik: bool) -> None:
+    try:
+        _ag_tercihi.parent.mkdir(parents=True, exist_ok=True)
+        _ag_tercihi.write_text(json.dumps({"lan": bool(acik)}))
+    except OSError as e:
+        logger.warning("Ağ tercihi kaydedilemedi: %s", e)
+
+
+def _lan_acik() -> bool:
+    """Sunucu şu AN ağa açık mı (dinlediği adres 127.0.0.1 dışında mı)?"""
+    return _calisan_host.get("host", "127.0.0.1") not in ("127.0.0.1", "localhost", "::1")
+
+
+# Çalışan sunucunun durumu — __main__ bloğu doldurur, /api/network günceller.
+_calisan_host: dict = {"host": "127.0.0.1", "server": None, "yeniden_baglan": None}
+
+
+@app.get("/api/network")
+async def ag_durumu():
+    return {
+        "lan": _lan_acik(),
+        "ip": _local_ip,
+        "port": _PORT,
+        "url": f"http://{_local_ip}:{_PORT}" if (_lan_acik() and _local_ip) else None,
+        "degistirilebilir": _calisan_host.get("yeniden_baglan") is not None,
+    }
+
+
+@app.post("/api/network")
+async def ag_ayarla(body: dict):
+    """Telefon/ağ erişimini aç-kapa. body: { lan: bool }
+
+    Uygulamayı yeniden başlatmadan sunucunun dinlediği adresi değiştirir.
+    """
+    istenen = bool(body.get("lan"))
+    _lan_tercihi_yaz(istenen)
+
+    if istenen == _lan_acik():
+        return {**await ag_durumu(), "changed": False}
+
+    yeniden_baglan = _calisan_host.get("yeniden_baglan")
+    if yeniden_baglan is None:
+        # Tercih kaydedildi ama canlı geçiş bu çalıştırma biçiminde desteklenmiyor
+        return {**await ag_durumu(), "changed": False,
+                "restart_required": True,
+                "hint": "Tercih kaydedildi — uygulamayı yeniden açtığınızda geçerli olacak."}
+
+    yeni_host = "0.0.0.0" if istenen else "127.0.0.1"
+    yeniden_baglan(yeni_host)
+    return {"lan": istenen, "ip": _local_ip, "port": _PORT,
+            "url": f"http://{_local_ip}:{_PORT}" if (istenen and _local_ip) else None,
+            "changed": True, "degistirilebilir": True}
 
 
 # ──────────────────────────────────────────────
@@ -2253,12 +2335,12 @@ if __name__ == "__main__":
     # Ağa açmak artık bilinçli bir tercih:
     #     GALLERYWEB_LAN=1 python main.py      → telefon/aynı-ağ erişimi
     #     HOST=0.0.0.0     python main.py      → aynısı (açık biçim)
-    if os.getenv("GALLERYWEB_LAN") == "1":
-        _host = os.getenv("HOST", "0.0.0.0")
-    else:
-        _host = os.getenv("HOST", "127.0.0.1")
+    # Öncelik: açık HOST > kayıtlı tercih / GALLERYWEB_LAN > güvenli varsayılan
+    _host = os.getenv("HOST") or ("0.0.0.0" if _lan_tercihi_oku() else "127.0.0.1")
 
-    if _host not in ("127.0.0.1", "localhost", "::1"):
+    def _bind_uyarisi(host: str) -> None:
+        if host in ("127.0.0.1", "localhost", "::1"):
+            return
         # flush=True ŞART: çıktı bir dosyaya/boruya yönlendirildiğinde (run.sh
         # logu, masaüstü kabuğu, docker) stdout blok-tamponlu olur ve bu uyarı
         # kullanıcıya HİÇ ulaşmaz — uvicorn'un kendi logları stderr'den geldiği
@@ -2267,9 +2349,40 @@ if __name__ == "__main__":
         print("   aynı ağdaki herkes fotoğraflarınızı görebilir ve silebilir.", flush=True)
         if _local_ip:
             print(f"📱 Telefon erişimi: http://{_local_ip}:{_PORT}", flush=True)
-    if _FROZEN:
-        # Paketlenmiş binary'de "main:app" import-string'i çözülemez; app nesnesini
-        # doğrudan ver. reload zaten son kullanıcıda kapalı olmalı.
-        uvicorn.run(app, host=_host, port=_PORT, log_level="info")
+
+    if _dev and not _FROZEN:
+        # Geliştirici modu: dosya izleyici için import-string şart, canlı
+        # yeniden bağlanma desteklenmez (zaten geliştirme senaryosu).
+        _calisan_host["host"] = _host
+        _bind_uyarisi(_host)
+        uvicorn.run("main:app", host=_host, port=_PORT, reload=True, log_level="info")
     else:
-        uvicorn.run("main:app", host=_host, port=_PORT, reload=_dev, log_level="info")
+        # Yeniden bağlanabilir sunucu döngüsü: /api/network telefon erişimini
+        # açıp kapatabilsin diye sunucuyu durdurup yeni adreste tekrar başlatır.
+        # Uygulamayı yeniden başlatmaya gerek kalmaz.
+        _istenen = {"host": None}
+
+        def _yeniden_baglan(yeni_host: str) -> None:
+            _istenen["host"] = yeni_host
+            srv = _calisan_host.get("server")
+            if srv is not None:
+                srv.should_exit = True
+
+        _calisan_host["host"] = _host
+        _calisan_host["yeniden_baglan"] = _yeniden_baglan
+
+        while True:
+            _bind_uyarisi(_calisan_host["host"])
+            _sunucu = uvicorn.Server(uvicorn.Config(
+                app, host=_calisan_host["host"], port=_PORT, log_level="info"))
+            _calisan_host["server"] = _sunucu
+            _sunucu.run()  # should_exit olana kadar bloklar
+
+            if not _istenen["host"]:
+                break
+            _calisan_host["host"] = _istenen["host"]
+            _istenen["host"] = None
+            # Yeni bir event loop başlıyor: eski döngüye bağlı asyncio kilitleri
+            # artık kullanılamaz, temizle.
+            _chain_locks.clear()
+            print(f"🔄 Sunucu yeniden bağlanıyor: {_calisan_host['host']}:{_PORT}", flush=True)
