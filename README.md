@@ -27,7 +27,7 @@ The **same codebase** powers both. Local mode is the default and needs zero exte
 - **Editing studio** — rotate, flip (H/V), aspect-locked crop, live-preview adjustments (brightness, contrast, saturation, sharpness, temperature, gamma), and one-click filter presets (B&W, sepia, vintage, cool, warm, vivid).
 - **Video trimming** — cut start/end with a two-handle timeline (ffmpeg). Non-destructive: originals are backed up and revertible.
 - **Fast browsing** — thumbnails (SQLite cache), EXIF display, duplicate finder, favorites, tags, albums, ratings, map view (GPS EXIF).
-- **PWA** — installable, works offline, phone access on your local network.
+- **PWA** — installable, works offline, optional phone access on your local network (`GALLERYWEB_LAN=1`).
 - **Sharing & proofing** *(hosted mode)* — client galleries with comments, votes, selections, and timestamped video annotations.
 - **AI semantic search** *(hosted mode)* — CLIP-based "find photos by describing them".
 
@@ -91,7 +91,7 @@ Inside the app, open the `/photos` folder. `ffmpeg` is already included in the i
 | **Video trimming does nothing** | `ffmpeg` isn't installed. `apt install ffmpeg` / `brew install ffmpeg` / `pacman -S ffmpeg`. Photos work without it. |
 | **HEIC / iPhone photos don't open** | The `pillow-heif` dependency covers this — reinstall with `pip install -r backend/requirements-selfhost.txt`. |
 | **`python: command not found`** | Install [Python 3.10+](https://www.python.org/downloads/). On Windows, tick **"Add Python to PATH"** during install. |
-| **Phone can't reach the gallery** | Use the `📱 Telefon erişimi:` URL printed on startup, and make sure the phone is on the **same Wi-Fi**. |
+| **Phone can't reach the gallery** | Network access is off by default. Start with `GALLERYWEB_LAN=1`, then use the `📱 Telefon erişimi:` URL it prints, and make sure the phone is on the **same Wi-Fi**. |
 | **Want developer auto-reload** | `GALLERYWEB_DEV=1 python main.py` (off by default for faster startup). |
 
 ---
@@ -115,9 +115,15 @@ Local and cloud mode are switchable in the UI (📂 / ☁ toggle). Local mode ne
 ## Security & privacy
 
 - Local mode stores everything on your machine and makes **no outbound calls** for auth.
-- ⚠️ **Local mode has no authentication — this is by design (single-user desktop use).** The server binds to `0.0.0.0`, so **anyone on the same network/Wi-Fi can read, tag, and delete your photos** via the API. Only run it on a network you trust. To restrict it to your own machine, start with `HOST=127.0.0.1` (or keep it behind a firewall). Do **not** expose local mode directly to the internet — use the hosted/cloud mode (with accounts) for multi-user or public deployments.
+- ⚠️ **Local mode has no authentication — this is by design (single-user desktop use).** Because of that the server now binds to **`127.0.0.1` only**: nothing leaves your machine unless you ask for it. Network access is opt-in:
 
-  > 🇹🇷 **Yerel modda giriş/parola yoktur — bu bilinçli bir tasarım (tek kişilik masaüstü kullanımı).** Sunucu `0.0.0.0`'a bağlanır, yani **aynı ağdaki/Wi-Fi'daki herkes** API üzerinden fotoğraflarınızı görebilir, etiketleyebilir ve silebilir. Yalnızca güvendiğiniz bir ağda çalıştırın. Sadece kendi makinenize kısıtlamak için `HOST=127.0.0.1` ile başlatın. Yerel modu **doğrudan internete açmayın** — çok kullanıcılı/herkese açık kurulumlar için hesaplı bulut modunu kullanın.
+  ```bash
+  GALLERYWEB_LAN=1 python main.py     # phone / same-Wi-Fi access
+  ```
+
+  When you enable it, **anyone on that network can read, tag, and delete your photos** via the API — the server prints a warning to remind you. Only do it on a network you trust, and never expose local mode directly to the internet — use the hosted/cloud mode (with accounts) for multi-user or public deployments.
+
+  > 🇹🇷 **Yerel modda giriş/parola yoktur — bu bilinçli bir tasarım (tek kişilik masaüstü kullanımı).** Bu yüzden sunucu artık **yalnızca `127.0.0.1`** dinler; hiçbir şey makinenizden dışarı çıkmaz. Ağa açmak isteğe bağlıdır: `GALLERYWEB_LAN=1 python main.py`. Açtığınızda **aynı ağdaki herkes** fotoğraflarınızı görebilir, etiketleyebilir ve silebilir — sunucu bunu açılışta uyarı olarak yazar. Yalnızca güvendiğiniz bir ağda açın, yerel modu **doğrudan internete açmayın**.
 
 - If you deploy behind a reverse proxy for cloud mode, set `ALLOWED_ORIGINS` to your exact domains (never `*` — the server rejects `*` and falls back to localhost).
 - Never commit your `.env` (it's git-ignored). Copy `.env.example` and fill in your own keys for cloud mode.

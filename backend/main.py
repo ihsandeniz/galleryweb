@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import sys
 import time
 import socket
 from pathlib import Path
@@ -46,19 +47,49 @@ if _env_origins:
     # zaten yasak + kullanıcı verisini her origin'e açar. "*" gelirse güvenli
     # localhost varsayılanına düş ve uyar. (SEC-F003)
     if "*" in _origins:
-        print("⚠️  ALLOWED_ORIGINS='*' güvensiz — localhost varsayılanına dönülüyor.")
+        print("⚠️  ALLOWED_ORIGINS='*' güvensiz — localhost varsayılanına dönülüyor.", flush=True)
         _origins = [f"http://127.0.0.1:{_PORT}", f"http://localhost:{_PORT}"]
         if _local_ip:
             _origins.append(f"http://{_local_ip}:{_PORT}")
 else:
     _origins = [f"http://127.0.0.1:{_PORT}", f"http://localhost:{_PORT}"]
     if _local_ip:
+        # LAN adresi CORS'ta izinli kalır (ağ erişimi açıldığında gerekiyor), ama
+        # "Telefon erişimi" satırı ARTIK BURADA YAZILMIYOR: sunucu varsayılan
+        # olarak yalnız 127.0.0.1 dinliyor, o adres çalışmıyor. Yanıltıcıydı.
+        # Gerçekten ağa açıldığında __main__ bloğu yazdırır.
         _origins.append(f"http://{_local_ip}:{_PORT}")
-        print(f"📱 Telefon erişimi: http://{_local_ip}:{_PORT}")
 
-BASE_DIR = Path(__file__).parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
-CACHE_DIR = BASE_DIR / "cache"
+def _user_data_dir() -> Path:
+    """Yazılabilir kullanıcı veri dizini (masaüstü paketi için).
+
+    Paketlenmiş uygulamada program dosyaları salt-okunur geçici bir dizinde açılır;
+    thumbnail cache'i oraya yazamayız. Platform standardına göre kalıcı bir yer seç.
+    `GALLERYWEB_DATA_DIR` ile dışarıdan (Tauri kabuğu) ezilebilir.
+    """
+    override = os.getenv("GALLERYWEB_DATA_DIR")
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt":
+        root = os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    else:
+        root = os.getenv("XDG_DATA_HOME") or (Path.home() / ".local" / "share")
+    return Path(root) / "GalleryWeb"
+
+
+# PyInstaller ile paketlendiğinde kaynaklar `sys._MEIPASS` altında açılır.
+_FROZEN = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+if _FROZEN:
+    BASE_DIR = Path(sys._MEIPASS)          # salt-okunur: frontend varlıkları
+    FRONTEND_DIR = BASE_DIR / "frontend"
+    CACHE_DIR = _user_data_dir() / "cache"  # yazılabilir: thumbnail db + önbellek
+else:
+    BASE_DIR = Path(__file__).parent.parent
+    FRONTEND_DIR = BASE_DIR / "frontend"
+    CACHE_DIR = BASE_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Global state
 current_directories: list[Path] = []   # Faz 5.2 — multi-folder support
@@ -555,8 +586,12 @@ async def serve_image(path: str, thumb: bool = False, w: int = 300):
 
     if thumb:
         size = max(100, min(800, w))
-        thumb_path = await thumbnail_gen.get_thumbnail(full_path, size=size)
-        return FileResponse(thumb_path)
+        thumb_path, okunabildi = await thumbnail_gen.get_thumbnail_ex(full_path, size=size)
+        # Okunamayan dosya için 500 DÖNMÜYORUZ: yer tutucu görsel + bilgilendirici
+        # başlık. Aksi halde tek bozuk dosya galeri kutucuğunu sonsuza kadar
+        # "yükleniyor" durumunda bırakıyordu.
+        return FileResponse(thumb_path,
+                            headers={"X-Thumb-Status": "ok" if okunabildi else "unreadable"})
     return FileResponse(full_path)
 
 
@@ -1863,6 +1898,34 @@ def _render_chain(full_path: Path, chain: dict) -> None:
     cache_manager.invalidate_thumbnail(str(full_path))
 
 
+# Dosya başına düzenleme kilidi.
+#
+# Zincir işlemleri "oku → değiştir → render et → yaz" dizisidir. Bugün araya
+# `await` girmediği için tek event loop'ta bölünmüyorlar; ama render'ı iş
+# parçacığına taşıdığımız an (aşağıda yapıldı — büyük fotoğrafta event loop'u
+# blokluyordu) araya başka istek girebilir ve iki eşzamanlı geri-al birbirinin
+# yazdığını ezerdi. Kilit bu diziyi bölünmez tutar.
+#
+# SINIR: yalnız süreç içi. Aynı klasörü iki AYRI GalleryWeb süreci düzenlerse
+# koruma sağlamaz (yerel/masaüstü kullanımda senaryo yok; olursa dosya kilidi
+# gerekir).
+_chain_locks: dict[str, asyncio.Lock] = {}
+
+
+def _chain_lock(full_path: Path) -> asyncio.Lock:
+    return _chain_locks.setdefault(str(full_path), asyncio.Lock())
+
+
+async def _render_chain_async(full_path: Path, chain: dict) -> None:
+    """Zinciri iş parçacığında render et — Pillow işi event loop'u bloklamasın.
+
+    Büyük bir fotoğrafın render'ı saniyeler sürebiliyor ve o süre boyunca
+    sunucu HİÇBİR isteğe yanıt vermiyordu (küçük resimler dahil).
+    """
+    await asyncio.get_event_loop().run_in_executor(
+        None, _render_chain, full_path, chain)
+
+
 def _chain_state(full_path: Path, chain: dict) -> dict:
     return {
         "ok": True,
@@ -1897,43 +1960,46 @@ async def edit_history(path: str):
 @app.post("/api/edit/{path:path}/undo")
 async def edit_undo(path: str):
     full_path = _resolve_editable(path)
-    chain = _load_chain(full_path)
-    if chain["cursor"] == 0:
-        return {**_chain_state(full_path, chain), "changed": False}
-    chain["cursor"] -= 1
-    _render_chain(full_path, chain)
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "changed": True}
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        if chain["cursor"] == 0:
+            return {**_chain_state(full_path, chain), "changed": False}
+        chain["cursor"] -= 1
+        await _render_chain_async(full_path, chain)
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "changed": True}
 
 
 @app.post("/api/edit/{path:path}/redo")
 async def edit_redo(path: str):
     full_path = _resolve_editable(path)
-    chain = _load_chain(full_path)
-    if chain["cursor"] >= len(chain["ops"]):
-        return {**_chain_state(full_path, chain), "changed": False}
-    chain["cursor"] += 1
-    _render_chain(full_path, chain)
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "changed": True}
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        if chain["cursor"] >= len(chain["ops"]):
+            return {**_chain_state(full_path, chain), "changed": False}
+        chain["cursor"] += 1
+        await _render_chain_async(full_path, chain)
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "changed": True}
 
 
 @app.post("/api/edit/{path:path}/goto")
 async def edit_goto(path: str, body: dict):
     """Zincirde herhangi bir adıma atla. body: { cursor: int } (0 = temel görüntü)."""
     full_path = _resolve_editable(path)
-    chain = _load_chain(full_path)
-    try:
-        target = int(body.get("cursor", chain["cursor"]))
-    except (TypeError, ValueError):
-        raise HTTPException(400, "Geçersiz adım numarası")
-    target = max(0, min(target, len(chain["ops"])))
-    if target == chain["cursor"]:
-        return {**_chain_state(full_path, chain), "changed": False}
-    chain["cursor"] = target
-    _render_chain(full_path, chain)
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "changed": True}
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        try:
+            target = int(body.get("cursor", chain["cursor"]))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Geçersiz adım numarası")
+        target = max(0, min(target, len(chain["ops"])))
+        if target == chain["cursor"]:
+            return {**_chain_state(full_path, chain), "changed": False}
+        chain["cursor"] = target
+        await _render_chain_async(full_path, chain)
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "changed": True}
 
 
 @app.post("/api/edit/{path:path}/revert")
@@ -1947,10 +2013,13 @@ async def revert_edit(path: str):
     if not backup_path.exists():
         return {"ok": False, "reverted": False, "reason": "Yedek bulunamadı"}
 
-    import shutil as _shutil
-    _shutil.copy2(backup_path, full_path)
-    _discard_chain(full_path)  # zincir + legacy temel artık geçersiz
-    cache_manager.invalidate_thumbnail(str(full_path))
+    # Aynı kilit: devam eden bir düzenleme render'ının ortasına girip dosyayı
+    # geri yüklemek, zinciri dosyayla tutarsız bırakırdı.
+    async with _chain_lock(full_path):
+        import shutil as _shutil
+        _shutil.copy2(backup_path, full_path)
+        _discard_chain(full_path)  # zincir + legacy temel artık geçersiz
+        cache_manager.invalidate_thumbnail(str(full_path))
     return {"ok": True, "reverted": True}
 
 
@@ -2057,22 +2126,23 @@ async def edit_image(path: str, body: dict):
     if operation not in {"rotate", "flip", "crop", "adjust", "filter"}:
         raise HTTPException(400, f"Bilinmeyen operasyon: {operation}")
 
-    chain = _load_chain(full_path)
-    _ensure_base(full_path, chain)  # legacy tespiti YENİ işlem eklenmeden yapılmalı
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        _ensure_base(full_path, chain)  # legacy tespiti YENİ işlem eklenmeden yapılmalı
 
-    chain["ops"] = chain["ops"][:chain["cursor"]]
-    chain["ops"].append({"op": operation, "params": params, "at": int(time.time())})
-    chain["cursor"] = len(chain["ops"])
+        chain["ops"] = chain["ops"][:chain["cursor"]]
+        chain["ops"].append({"op": operation, "params": params, "at": int(time.time())})
+        chain["cursor"] = len(chain["ops"])
 
-    try:
-        _render_chain(full_path, chain)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Düzenleme hatası: {e}")
+        try:
+            await _render_chain_async(full_path, chain)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Düzenleme hatası: {e}")
 
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "has_backup": True}
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "has_backup": True}
 
 
 # ──────────────────────────────────────────────
@@ -2105,12 +2175,101 @@ async def get_service_worker():
     return FR(str(sw_path), media_type="application/javascript")
 
 
+def _start_parent_watchdog() -> None:
+    """Masaüstü kabuğu ölürse sunucuyu da kapat (öksüz süreç bırakma).
+
+    Kabuk, sunucuyu stdin'i bir boruya (pipe) bağlı olarak başlatır ve o borudan
+    hiçbir şey yazmaz. Kabuk hangi sebeple olursa olsun (kapanma, çökme, SIGKILL)
+    sonlanınca borunun yazma ucu kapanır → burada EOF okuruz → çıkarız.
+
+    Sinyal iletmeye göre üstünlüğü: SIGKILL edilen bir ebeveyn sinyali
+    iletemez ve PyInstaller tek-dosya paketinde asıl Python süreci
+    bootloader'ın ÇOCUĞUDUR — sinyal tabanlı temizlik onu ıskalıyordu.
+    Bu yöntem Windows/macOS/Linux'ta aynı çalışır.
+    """
+    def _watch():
+        # ⚠️ `sys.stdin.buffer.read()` KULLANMA. O çağrı tamponlu okuyucunun
+        # kilidini tutarak bloklar; thumbnail üreten ProcessPoolExecutor fork
+        # ettiğinde çocuk bu kilidi KİLİTLİ devralır (sahibi thread çocukta
+        # yoktur) ve multiprocessing worker'ı açılışta stdin'i kapatmaya
+        # çalışınca kalıcı kilitlenme olur — küçük resimler hiç gelmez.
+        # Ham fd okuması hiçbir Python kilidi tutmaz.
+        try:
+            while os.read(0, 1):
+                pass  # kabuk bir şey yazmaz; yazarsa da yoksay
+        except OSError:
+            pass
+        # Küçük resim havuzunun işçilerini de indir. `os._exit` hiçbir temizlik
+        # (atexit / executor shutdown) çalıştırmaz; onlarsız 4 işçi süreci öksüz
+        # kalıp (PPID=1) uygulama kapandıktan sonra da arkada durur.
+        try:
+            import multiprocessing
+            kids = multiprocessing.active_children()
+            logger.info("Kapanış: %d havuz işçisi sonlandırılıyor", len(kids))
+            for child in kids:
+                child.terminate()
+        except Exception as e:
+            logger.warning("Havuz işçileri sonlandırılamadı: %s", e)
+
+        # POSIX'te kesin çözüm: kendi süreç grubumuzu indir. Kabuk sunucuyu ayrı
+        # bir süreç grubunda başlatır (bkz. Rust tarafında process_group(0)), bu
+        # yüzden yalnızca sunucu + işçileri etkilenir, kabuk/terminal etkilenmez.
+        # multiprocessing muhasebesine güvenmez: işçi hangi yolla yaratılmış olursa
+        # olsun grup içindedir.
+        if os.name != "nt":
+            try:
+                import signal as _signal
+                os.killpg(os.getpgrp(), _signal.SIGKILL)
+            except OSError:
+                pass
+        os._exit(0)
+
+    import threading
+    threading.Thread(target=_watch, daemon=True, name="parent-watchdog").start()
+
+
 if __name__ == "__main__":
+    # PyInstaller + multiprocessing: bu çağrı EN BAŞTA olmalı. Windows (spawn)
+    # ve macOS'ta alt süreçler çalıştırılabilir dosyayı yeniden başlatır; bu
+    # satır olmadan her alt süreç uygulamanın kendisini yeniden açar ve süreç
+    # bombasına dönüşür. Ana süreçte hiçbir şey yapmaz, anında döner.
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     import uvicorn
+
+    # Yalnız masaüstü kabuğu altında: stdin borusu kapanınca kendini sonlandır.
+    # Terminalden elle çalıştırmada devrede DEĞİL (stdin kapalıysa anında çıkardı).
+    if os.getenv("GALLERYWEB_DESKTOP") == "1":
+        _start_parent_watchdog()
     # reload = geliştirici modu (dosya izler, süreci ikiye katlar). Son kullanıcıda
     # kapalı olmalı — hızlı başlar, az RAM. Geliştirirken: GALLERYWEB_DEV=1 python main.py
     _dev = os.getenv("GALLERYWEB_DEV") == "1"
-    # HOST varsayılan 0.0.0.0 (telefon/aynı-ağ erişimi için). Tek makineye kısıtlamak
-    # için HOST=127.0.0.1 (README güvenlik notu — yerel modda auth yok).
-    _host = os.getenv("HOST", "0.0.0.0")
-    uvicorn.run("main:app", host=_host, port=_PORT, reload=_dev, log_level="info")
+    # GÜVENLİ VARSAYILAN: yalnız bu makine.
+    #
+    # Eskiden varsayılan 0.0.0.0'dı; yerel modda GİRİŞ/PAROLA OLMADIĞI için bu,
+    # `python main.py` diyen herkesin galerisini sessizce tüm Wi-Fi'a açıyordu
+    # (aynı ağdaki herkes fotoğrafları okuyabilir, etiketleyebilir, SİLEBİLİR).
+    # Ağa açmak artık bilinçli bir tercih:
+    #     GALLERYWEB_LAN=1 python main.py      → telefon/aynı-ağ erişimi
+    #     HOST=0.0.0.0     python main.py      → aynısı (açık biçim)
+    if os.getenv("GALLERYWEB_LAN") == "1":
+        _host = os.getenv("HOST", "0.0.0.0")
+    else:
+        _host = os.getenv("HOST", "127.0.0.1")
+
+    if _host not in ("127.0.0.1", "localhost", "::1"):
+        # flush=True ŞART: çıktı bir dosyaya/boruya yönlendirildiğinde (run.sh
+        # logu, masaüstü kabuğu, docker) stdout blok-tamponlu olur ve bu uyarı
+        # kullanıcıya HİÇ ulaşmaz — uvicorn'un kendi logları stderr'den geldiği
+        # için sorun fark edilmiyordu.
+        print("⚠️  Sunucu AĞA AÇIK bağlanıyor ve yerel modda giriş/parola YOKTUR —", flush=True)
+        print("   aynı ağdaki herkes fotoğraflarınızı görebilir ve silebilir.", flush=True)
+        if _local_ip:
+            print(f"📱 Telefon erişimi: http://{_local_ip}:{_PORT}", flush=True)
+    if _FROZEN:
+        # Paketlenmiş binary'de "main:app" import-string'i çözülemez; app nesnesini
+        # doğrudan ver. reload zaten son kullanıcıda kapalı olmalı.
+        uvicorn.run(app, host=_host, port=_PORT, log_level="info")
+    else:
+        uvicorn.run("main:app", host=_host, port=_PORT, reload=_dev, log_level="info")

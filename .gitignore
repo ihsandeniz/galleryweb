@@ -32,3 +32,6 @@ ios/
 
 # Kişisel self-host kurulumu (kişisel yollar içerir — yayımlanmaz)
 docker-compose.kisisel.yml
+
+# Masaüstü paketi derleme ortamı
+.build-venv/
