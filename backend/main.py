@@ -1546,7 +1546,14 @@ async def get_qr_url():
 # kullanıcının bilinçli tercihi. Tercih kullanıcı veri dizininde saklanır ki
 # uygulama yeniden açıldığında da geçerli olsun.
 
-_ag_tercihi = CACHE_DIR.parent / "network.json"
+# Ayar dosyası nereye yazılsın?
+#   • paketlenmiş uygulama / GALLERYWEB_DATA_DIR verilmişse → kullanıcı veri dizini
+#   • kaynaktan çalışırken                                  → repo içindeki cache/
+# Eskiden CACHE_DIR.parent'tı; kaynaktan çalışırken bu REPO KÖKÜ demek — tercih
+# dosyası git'in görüntüsüne düşüyordu. Üstelik GALLERYWEB_DATA_DIR yalnız paketli
+# modda dikkate alındığı için testler birbirinin tercihini eziyordu.
+_ayar_dir = _user_data_dir() if (_FROZEN or os.getenv("GALLERYWEB_DATA_DIR")) else CACHE_DIR
+_ag_tercihi = _ayar_dir / "network.json"
 
 
 def _lan_tercihi_oku() -> bool:
