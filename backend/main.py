@@ -2146,11 +2146,40 @@ def _start_parent_watchdog() -> None:
     Bu yöntem Windows/macOS/Linux'ta aynı çalışır.
     """
     def _watch():
+        # ⚠️ `sys.stdin.buffer.read()` KULLANMA. O çağrı tamponlu okuyucunun
+        # kilidini tutarak bloklar; thumbnail üreten ProcessPoolExecutor fork
+        # ettiğinde çocuk bu kilidi KİLİTLİ devralır (sahibi thread çocukta
+        # yoktur) ve multiprocessing worker'ı açılışta stdin'i kapatmaya
+        # çalışınca kalıcı kilitlenme olur — küçük resimler hiç gelmez.
+        # Ham fd okuması hiçbir Python kilidi tutmaz.
         try:
-            while sys.stdin.buffer.read(1):
+            while os.read(0, 1):
                 pass  # kabuk bir şey yazmaz; yazarsa da yoksay
-        except Exception:
+        except OSError:
             pass
+        # Küçük resim havuzunun işçilerini de indir. `os._exit` hiçbir temizlik
+        # (atexit / executor shutdown) çalıştırmaz; onlarsız 4 işçi süreci öksüz
+        # kalıp (PPID=1) uygulama kapandıktan sonra da arkada durur.
+        try:
+            import multiprocessing
+            kids = multiprocessing.active_children()
+            logger.info("Kapanış: %d havuz işçisi sonlandırılıyor", len(kids))
+            for child in kids:
+                child.terminate()
+        except Exception as e:
+            logger.warning("Havuz işçileri sonlandırılamadı: %s", e)
+
+        # POSIX'te kesin çözüm: kendi süreç grubumuzu indir. Kabuk sunucuyu ayrı
+        # bir süreç grubunda başlatır (bkz. Rust tarafında process_group(0)), bu
+        # yüzden yalnızca sunucu + işçileri etkilenir, kabuk/terminal etkilenmez.
+        # multiprocessing muhasebesine güvenmez: işçi hangi yolla yaratılmış olursa
+        # olsun grup içindedir.
+        if os.name != "nt":
+            try:
+                import signal as _signal
+                os.killpg(os.getpgrp(), _signal.SIGKILL)
+            except OSError:
+                pass
         os._exit(0)
 
     import threading

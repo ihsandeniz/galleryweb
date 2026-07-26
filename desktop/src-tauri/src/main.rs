@@ -152,6 +152,14 @@ fn main() {
                 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
                 cmd.creation_flags(CREATE_NO_WINDOW); // konsol penceresi açılmasın
             }
+            #[cfg(unix)]
+            {
+                // Sunucuyu KENDİ süreç grubuna al. Sunucu kapanırken grubunu
+                // topluca indiriyor (küçük resim havuzunun işçileri dahil);
+                // ayrı grup olmasa bu temizlik kabuğu da vururdu.
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
 
             let child = cmd.spawn().map_err(|e| {
                 if e.kind() == ErrorKind::PermissionDenied {

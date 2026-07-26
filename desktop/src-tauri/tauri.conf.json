@@ -25,6 +25,11 @@
     "resources": {
       "../dist/galleryweb-server": "galleryweb-server"
     },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
     "category": "Photography",
     "shortDescription": "Yerel fotoğraf galerisi",
     "longDescription": "GalleryWeb — bilgisayarındaki fotoğraf ve videoları tarayan, etiketleyen ve düzenleyen yerel galeri uygulaması. İnternet bağlantısı gerektirmez, hiçbir veri dışarı gönderilmez."

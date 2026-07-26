@@ -52,6 +52,13 @@ sunucu_yap() {
 uygulama_yap() {
     command -v cargo >/dev/null || hata "Rust (cargo) kurulu değil → https://rustup.rs"
     command -v cargo-tauri >/dev/null || hata "cargo-tauri yok → cargo install tauri-cli --version '^2.0'"
+    # AppImage'a gstreamer eklentilerini (video oynatma) gömen linuxdeploy eklentisi
+    # patchelf ister; yoksa TÜM derleme düşer. Erken ve anlaşılır uyar.
+    if [[ "$(uname -s)" == "Linux" ]] && ! command -v patchelf >/dev/null; then
+        hata "patchelf kurulu değil — AppImage'da video oynatma için gerekli.
+       Arch: sudo pacman -S patchelf · Debian/Ubuntu: sudo apt install patchelf
+       Videosuz paket istiyorsan: cargo tauri build --bundles deb"
+    fi
     renk "▸ Masaüstü uygulaması derleniyor (Tauri)…"
     # NO_STRIP: linuxdeploy'un içindeki eski `strip`, modern dağıtımların
     # `.relr.dyn` bölümlü kütüphanelerini tanımıyor ve AppImage adımı çöküyor
