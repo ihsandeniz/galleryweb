@@ -35,3 +35,6 @@ docker-compose.kisisel.yml
 
 # Masaüstü paketi derleme ortamı
 .build-venv/
+
+# Araç önbelleği (lean-ctx) — sürümlenmemeli
+.lean-ctx/
