@@ -83,3 +83,24 @@ Sanal ekranda (Xvfb) uçtan uca test — senin masaüstünü etkilemez:
 | Önbellek kullanıcı veri dizinine yazılıyor | ✅ |
 | `kill -9` sonrası arkada sunucu kalmıyor | ✅ |
 | Paketlenmiş binary, kaynak sürümle aynı davranıyor | ✅ 36/36 test |
+
+Üretilen AppImage, son kullanıcı gibi (kurulum yapmadan, temiz veri dizeniyle) ayrıca denendi:
+çalıştı · gömülü sunucu kalktı · HTTP 200 · webview galeriyi yükledi · gerçek klasörden 7 dosya
+listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalmadı (7/7).
+
+> **Not:** Doğrulamalar başsız (headless) sanal ekranda yapıldı; pencere içeriğinin
+> piksel görüntüsü alınamadı (X sunucusunda pencere yöneticisi yok). Arayüzün kendisi
+> aynı sürümle Chromium'da görsel olarak doğrulanmıştır (Faz 9/10 testleri).
+
+## Paket boyutları
+
+| Paket | Boyut | Not |
+|---|---|---|
+| `.deb` | 54 MB | Sistem GTK/WebKit'ini kullanır |
+| `.AppImage` | 147 MB | GTK/WebKit'i de içine alır — hiçbir bağımlılık istemez |
+
+## Bilinen tuzak
+
+AppImage adımı `linuxdeploy` içindeki eski `strip` yüzünden modern dağıtımlarda
+(`.relr.dyn` bölümü) çöküyor. `yap.sh` bunu `NO_STRIP=true` ile aşar; elle
+derliyorsan aynı değişkeni geçmelisin.

@@ -53,7 +53,10 @@ uygulama_yap() {
     command -v cargo >/dev/null || hata "Rust (cargo) kurulu değil → https://rustup.rs"
     command -v cargo-tauri >/dev/null || hata "cargo-tauri yok → cargo install tauri-cli --version '^2.0'"
     renk "▸ Masaüstü uygulaması derleniyor (Tauri)…"
-    ( cd "$DESKTOP_DIR/src-tauri" && cargo tauri build )
+    # NO_STRIP: linuxdeploy'un içindeki eski `strip`, modern dağıtımların
+    # `.relr.dyn` bölümlü kütüphanelerini tanımıyor ve AppImage adımı çöküyor
+    # (Arch'ta doğrulandı). Strip'i atlamak yalnızca paket boyutunu etkiler.
+    ( cd "$DESKTOP_DIR/src-tauri" && NO_STRIP=true cargo tauri build )
     renk "  ✓ Paketler: $DESKTOP_DIR/src-tauri/target/release/bundle/"
 }
 
