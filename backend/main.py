@@ -2191,6 +2191,13 @@ def _start_parent_watchdog() -> None:
 
 
 if __name__ == "__main__":
+    # PyInstaller + multiprocessing: bu çağrı EN BAŞTA olmalı. Windows (spawn)
+    # ve macOS'ta alt süreçler çalıştırılabilir dosyayı yeniden başlatır; bu
+    # satır olmadan her alt süreç uygulamanın kendisini yeniden açar ve süreç
+    # bombasına dönüşür. Ana süreçte hiçbir şey yapmaz, anında döner.
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     import uvicorn
 
     # Yalnız masaüstü kabuğu altında: stdin borusu kapanınca kendini sonlandır.

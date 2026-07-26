@@ -2,7 +2,7 @@ from PIL import Image
 import hashlib
 from pathlib import Path
 import asyncio
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import os
 import shutil
 import subprocess
@@ -23,7 +23,19 @@ class ThumbnailGenerator:
         self.thumb_size = thumb_size
         self.cache_dir = Path(cache_dir) if cache_dir else Path(__file__).parent.parent / "cache" / "thumbnails"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.executor = ProcessPoolExecutor(max_workers=min(4, os.cpu_count() or 2))
+        isci = min(4, os.cpu_count() or 2)
+        # Windows'ta süreç havuzu KULLANMA. Orada multiprocessing `fork` değil
+        # `spawn` yapar: her işçi çalıştırılabilir dosyayı baştan başlatır —
+        # paketlenmiş uygulamada bu, 55 MB'lık exe'nin dört kez yeniden açılması
+        # ve her açılışta paketin geçici dizine çıkarılması demek (çok yavaş,
+        # `freeze_support()` unutulursa süreç bombası). Pillow'un çöz/ölçekle
+        # işlemleri GIL'i bıraktığı için iş parçacığı havuzu Windows'ta hem
+        # güvenli hem yeterli. POSIX'te fork ucuz → gerçek paralellik korunur.
+        if os.name == "nt":
+            self.executor = ThreadPoolExecutor(max_workers=isci,
+                                               thread_name_prefix="thumb")
+        else:
+            self.executor = ProcessPoolExecutor(max_workers=isci)
 
     def _generate_thumb_path(self, original_path: Path, size: int = 300) -> Path:
         file_hash = hashlib.md5(str(original_path).encode()).hexdigest()
