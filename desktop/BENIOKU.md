@@ -34,6 +34,46 @@ cd desktop
 **Gereksinimler:** Python 3.10–3.13 · Rust (`cargo`) · `cargo install tauri-cli --version "^2.0"` ·
 Linux'ta `webkit2gtk-4.1` · video kırpma için `ffmpeg` (opsiyonel).
 
+## Windows 10 / 11
+
+**Paket Windows üzerinde derlenmelidir.** PyInstaller çapraz derleme yapmaz;
+Linux'ta üretilen sunucu binary'si Windows'ta çalışmaz. Kod hazır, derleme betiği
+hazır — tek gereken bir Windows makinesi.
+
+```powershell
+cd desktop
+.\yap.ps1              # galleryweb-server.exe + NSIS kurulum paketi
+.\yap.ps1 sunucu       # sadece sunucu exe'si
+.\yap.ps1 calistir     # geliştirme: derle + uygulamayı aç
+```
+
+Gereksinimler: Python 3.10–3.13 (python.org, "Add Python to PATH" işaretli —
+**Microsoft Store kısayolu gerçek Python değildir**) · Rust · `cargo install
+tauri-cli --version "^2.0"` · WebView2 (Win 10/11'de genelde kurulu).
+
+Windows için özel olarak yapılanlar:
+
+| Konu | Neden gerekti |
+|---|---|
+| Küçük resim havuzu Windows'ta **iş parçacığı** havuzu | Orada multiprocessing `spawn` yapar → her işçi 55 MB'lık exe'yi baştan açardı; `freeze_support()` olmadan süreç bombası |
+| `multiprocessing.freeze_support()` | PyInstaller + spawn için zorunlu |
+| Kaynak eşlemesi platforma özel (`tauri.windows.conf.json`) | Sunucu dosyası Windows'ta `.exe` uzantılı; tek yapılandırma paketlemeyi düşürürdü |
+| ffmpeg yoksa video yer tutucusu | Windows'ta ffmpeg varsayılan kurulu değil — eskiden her video kutucuğu 500 veriyordu |
+| Veri dizini `%LOCALAPPDATA%` | Program dizini salt-okunur |
+| Sunucu penceresi gizli (`CREATE_NO_WINDOW`) | Arkada siyah konsol açılmasın |
+
+Doğrulama (Linux'tan yapılabildiği kadarıyla): Rust'ın Windows hedefiyle tip
+kontrolü geçti (`cargo check --target x86_64-pc-windows-msvc`) — `#[cfg(windows)]`
+dalları derleniyor. Python tarafında Windows'a giden dallar zorlanarak test edildi
+(9/9): iş parçacığı havuzu seçimi, o havuzla gerçek küçük resim üretimi, bozuk
+dosyanın yer tutucuya düşmesi, iki yer tutucu biçimi, `freeze_support` sırası,
+`killpg`'nin POSIX'e kapatılması.
+
+⚠️ **Gerçek Windows'ta hâlâ denenmedi:** exe üretimi, NSIS kurulumu, pencerenin
+açılması, WebView2 davranışı. Bunlar ancak Windows makinede koşularak kapanır.
+Ayrıca kurulum paketi **imzasız** olacağı için SmartScreen uyarısı çıkar
+("Daha fazla bilgi" → "Yine de çalıştır").
+
 ## Tasarım kararları
 
 **Neden gömülü sunucu, neden tam yeniden yazım değil?**
