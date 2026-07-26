@@ -2374,7 +2374,15 @@ if __name__ == "__main__":
         while True:
             _bind_uyarisi(_calisan_host["host"])
             _sunucu = uvicorn.Server(uvicorn.Config(
-                app, host=_calisan_host["host"], port=_PORT, log_level="info"))
+                app, host=_calisan_host["host"], port=_PORT, log_level="info",
+                # `/api/watch` HİÇ BİTMEYEN bir SSE akışıdır (istemci kapatana
+                # kadar sürer). Zarif kapanış açık bağlantıları beklediği için,
+                # galeri açıkken telefon erişimi anahtarı çevrildiğinde sunucu
+                # "Waiting for connections to close." diyip SONSUZA KADAR asılı
+                # kalıyordu — yani yeniden bağlanma hiç gerçekleşmiyordu.
+                # (curl ile test edildiğinde uzun-bağlantı olmadığı için sorun
+                # görünmüyordu.) Kısa bir tavan koyup akışı zorla kapatıyoruz.
+                timeout_graceful_shutdown=3))
             _calisan_host["server"] = _sunucu
             _sunucu.run()  # should_exit olana kadar bloklar
 
