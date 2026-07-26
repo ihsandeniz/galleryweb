@@ -43,9 +43,23 @@ impl ServerProcess {
     }
 }
 
-/// İşletim sisteminden boş bir port iste (0 = "sen seç"), sonra bırak.
-/// Küçük bir yarış penceresi var ama sunucu hemen ardından bağlanıyor.
+/// Uygulamanın kullanacağı port.
+///
+/// Önce SABİT bir aday listesi denenir, ancak bulunamazsa işletim sisteminden
+/// rastgele boş port istenir (0 = "sen seç").
+///
+/// Neden sabit? Telefon erişimi açıldığında çoğu Linux kurulumunda güvenlik
+/// duvarına elle kural yazmak gerekiyor (varsayılan politika `drop`). Port her
+/// açılışta değişirse o kural yazılamaz — ayrıca QR adresi de her seferinde
+/// başka çıkar. 5096-5099 aralığı web modunun 5000'iyle çakışmasın diye seçildi.
 fn pick_free_port() -> u16 {
+    // 0.0.0.0'a bağlanmayı dene: telefon erişimi açıkken sunucu da oraya
+    // bağlanacak, dolayısıyla asıl çakışma testi budur.
+    for aday in [5096u16, 5097, 5098, 5099] {
+        if TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, aday)).is_ok() {
+            return aday;
+        }
+    }
     TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
         .and_then(|l| l.local_addr())
         .map(|a| a.port())
