@@ -169,8 +169,10 @@ fn main() {
             // tek-dosya paketinde asıl Python süreci bootloader'ın çocuğu.)
             cmd.stdin(Stdio::piped())
                 .env("PORT", port.to_string())
-                // Yerel modda kimlik doğrulama YOK → asla 0.0.0.0'a bağlama.
-                .env("HOST", "127.0.0.1")
+                // HOST'u KASITLI OLARAK ayarlamıyoruz. Sunucunun kendi güvenli
+                // varsayılanı zaten 127.0.0.1; ama kullanıcı uygulama içinden
+                // "telefon erişimi"ni açtıysa o tercih kayıtlıdır ve buradan
+                // HOST geçmek onu sessizce ezerdi.
                 .env("GALLERYWEB_DATA_DIR", &data_dir)
                 .env("GALLERYWEB_DESKTOP", "1");
             #[cfg(windows)]

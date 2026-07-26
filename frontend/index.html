@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photo Gallery Pro</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=28">
+    <link rel="stylesheet" href="/static/css/style.css?v=29">
     <!-- Leaflet (Map) — self-host, CDN'e istek gitmez -->
     <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
     <!-- PWA -->
@@ -697,6 +697,16 @@
             <div class="qr-modal-body">
                 <img id="qrImage" src="" alt="QR Kod" class="qr-image">
                 <p id="qrUrlText" class="qr-url-text"></p>
+                <div id="lanBox" class="lan-box hidden">
+                    <label class="lan-toggle">
+                        <input type="checkbox" id="lanToggle">
+                        <span>Telefon erişimini aç <small>(aynı Wi-Fi)</small></span>
+                    </label>
+                    <p id="lanWarn" class="lan-warn">
+                        ⚠️ Yerel modda giriş/parola yoktur — açtığınızda aynı ağdaki
+                        herkes fotoğraflarınızı görebilir ve silebilir.
+                    </p>
+                </div>
                 <button id="copyQrUrlBtn" class="btn btn-primary">🔗 URL Kopyala</button>
             </div>
         </div>
@@ -922,7 +932,7 @@
         }
     });
     </script>
-    <script src="/static/js/gallery.js?v=26"></script>
+    <script src="/static/js/gallery.js?v=27"></script>
     <script src="/static/js/keybinds.js?v=21"></script>
     <script src="/static/js/slideshow.js?v=18"></script>
     <script src="/static/js/search.js?v=2"></script>
