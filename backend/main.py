@@ -1895,6 +1895,34 @@ def _render_chain(full_path: Path, chain: dict) -> None:
     cache_manager.invalidate_thumbnail(str(full_path))
 
 
+# Dosya başına düzenleme kilidi.
+#
+# Zincir işlemleri "oku → değiştir → render et → yaz" dizisidir. Bugün araya
+# `await` girmediği için tek event loop'ta bölünmüyorlar; ama render'ı iş
+# parçacığına taşıdığımız an (aşağıda yapıldı — büyük fotoğrafta event loop'u
+# blokluyordu) araya başka istek girebilir ve iki eşzamanlı geri-al birbirinin
+# yazdığını ezerdi. Kilit bu diziyi bölünmez tutar.
+#
+# SINIR: yalnız süreç içi. Aynı klasörü iki AYRI GalleryWeb süreci düzenlerse
+# koruma sağlamaz (yerel/masaüstü kullanımda senaryo yok; olursa dosya kilidi
+# gerekir).
+_chain_locks: dict[str, asyncio.Lock] = {}
+
+
+def _chain_lock(full_path: Path) -> asyncio.Lock:
+    return _chain_locks.setdefault(str(full_path), asyncio.Lock())
+
+
+async def _render_chain_async(full_path: Path, chain: dict) -> None:
+    """Zinciri iş parçacığında render et — Pillow işi event loop'u bloklamasın.
+
+    Büyük bir fotoğrafın render'ı saniyeler sürebiliyor ve o süre boyunca
+    sunucu HİÇBİR isteğe yanıt vermiyordu (küçük resimler dahil).
+    """
+    await asyncio.get_event_loop().run_in_executor(
+        None, _render_chain, full_path, chain)
+
+
 def _chain_state(full_path: Path, chain: dict) -> dict:
     return {
         "ok": True,
@@ -1929,43 +1957,46 @@ async def edit_history(path: str):
 @app.post("/api/edit/{path:path}/undo")
 async def edit_undo(path: str):
     full_path = _resolve_editable(path)
-    chain = _load_chain(full_path)
-    if chain["cursor"] == 0:
-        return {**_chain_state(full_path, chain), "changed": False}
-    chain["cursor"] -= 1
-    _render_chain(full_path, chain)
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "changed": True}
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        if chain["cursor"] == 0:
+            return {**_chain_state(full_path, chain), "changed": False}
+        chain["cursor"] -= 1
+        await _render_chain_async(full_path, chain)
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "changed": True}
 
 
 @app.post("/api/edit/{path:path}/redo")
 async def edit_redo(path: str):
     full_path = _resolve_editable(path)
-    chain = _load_chain(full_path)
-    if chain["cursor"] >= len(chain["ops"]):
-        return {**_chain_state(full_path, chain), "changed": False}
-    chain["cursor"] += 1
-    _render_chain(full_path, chain)
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "changed": True}
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        if chain["cursor"] >= len(chain["ops"]):
+            return {**_chain_state(full_path, chain), "changed": False}
+        chain["cursor"] += 1
+        await _render_chain_async(full_path, chain)
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "changed": True}
 
 
 @app.post("/api/edit/{path:path}/goto")
 async def edit_goto(path: str, body: dict):
     """Zincirde herhangi bir adıma atla. body: { cursor: int } (0 = temel görüntü)."""
     full_path = _resolve_editable(path)
-    chain = _load_chain(full_path)
-    try:
-        target = int(body.get("cursor", chain["cursor"]))
-    except (TypeError, ValueError):
-        raise HTTPException(400, "Geçersiz adım numarası")
-    target = max(0, min(target, len(chain["ops"])))
-    if target == chain["cursor"]:
-        return {**_chain_state(full_path, chain), "changed": False}
-    chain["cursor"] = target
-    _render_chain(full_path, chain)
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "changed": True}
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        try:
+            target = int(body.get("cursor", chain["cursor"]))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Geçersiz adım numarası")
+        target = max(0, min(target, len(chain["ops"])))
+        if target == chain["cursor"]:
+            return {**_chain_state(full_path, chain), "changed": False}
+        chain["cursor"] = target
+        await _render_chain_async(full_path, chain)
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "changed": True}
 
 
 @app.post("/api/edit/{path:path}/revert")
@@ -1979,10 +2010,13 @@ async def revert_edit(path: str):
     if not backup_path.exists():
         return {"ok": False, "reverted": False, "reason": "Yedek bulunamadı"}
 
-    import shutil as _shutil
-    _shutil.copy2(backup_path, full_path)
-    _discard_chain(full_path)  # zincir + legacy temel artık geçersiz
-    cache_manager.invalidate_thumbnail(str(full_path))
+    # Aynı kilit: devam eden bir düzenleme render'ının ortasına girip dosyayı
+    # geri yüklemek, zinciri dosyayla tutarsız bırakırdı.
+    async with _chain_lock(full_path):
+        import shutil as _shutil
+        _shutil.copy2(backup_path, full_path)
+        _discard_chain(full_path)  # zincir + legacy temel artık geçersiz
+        cache_manager.invalidate_thumbnail(str(full_path))
     return {"ok": True, "reverted": True}
 
 
@@ -2089,22 +2123,23 @@ async def edit_image(path: str, body: dict):
     if operation not in {"rotate", "flip", "crop", "adjust", "filter"}:
         raise HTTPException(400, f"Bilinmeyen operasyon: {operation}")
 
-    chain = _load_chain(full_path)
-    _ensure_base(full_path, chain)  # legacy tespiti YENİ işlem eklenmeden yapılmalı
+    async with _chain_lock(full_path):
+        chain = _load_chain(full_path)
+        _ensure_base(full_path, chain)  # legacy tespiti YENİ işlem eklenmeden yapılmalı
 
-    chain["ops"] = chain["ops"][:chain["cursor"]]
-    chain["ops"].append({"op": operation, "params": params, "at": int(time.time())})
-    chain["cursor"] = len(chain["ops"])
+        chain["ops"] = chain["ops"][:chain["cursor"]]
+        chain["ops"].append({"op": operation, "params": params, "at": int(time.time())})
+        chain["cursor"] = len(chain["ops"])
 
-    try:
-        _render_chain(full_path, chain)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Düzenleme hatası: {e}")
+        try:
+            await _render_chain_async(full_path, chain)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Düzenleme hatası: {e}")
 
-    _save_chain(full_path, chain)
-    return {**_chain_state(full_path, chain), "has_backup": True}
+        _save_chain(full_path, chain)
+        return {**_chain_state(full_path, chain), "has_backup": True}
 
 
 # ──────────────────────────────────────────────
