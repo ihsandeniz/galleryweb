@@ -1606,6 +1606,14 @@ async function refreshLanBox() {
         if (fwBox && d.lan && fw && fw.aktif) {
             document.getElementById('lanFwKind').textContent = fw.tur;
             document.getElementById('lanFwCmd').textContent = fw.komut;
+            // Windows'ta komut yönetici hakkı ister; bunu yazmazsak kullanıcı
+            // komutu çalıştırır, "Requested operation requires elevation" alır
+            // ve güvenlik duvarını suçlamaz — uygulamayı suçlar.
+            const noteEl = document.getElementById('lanFwNote');
+            if (noteEl) {
+                noteEl.textContent = fw.not || '';
+                noteEl.classList.toggle('hidden', !fw.not);
+            }
             fwBox.classList.remove('hidden');
         } else if (fwBox) {
             fwBox.classList.add('hidden');

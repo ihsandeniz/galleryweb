@@ -2734,6 +2734,12 @@ kbd {
     color: var(--text-secondary, #9ca3af);
 }
 
+.lan-firewall-note {
+    margin: 6px 0 0 !important;
+    font-size: 10.5px !important;
+    color: var(--warning, #fbbf24) !important;
+}
+
 .lan-firewall code {
     display: block;
     padding: 6px 8px;
