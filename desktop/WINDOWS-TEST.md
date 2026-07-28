@@ -19,9 +19,12 @@ paketinin içeriğini doğruluyor. Ama CI'nın **yapamadığı** altı şey var 
 
 ## Paketi indir
 
-1. https://github.com/ihsandeniz/galleryweb/actions → en üstteki yeşil **CI** koşusu
-2. Sayfanın altında **Artifacts** → `galleryweb-windows` → indir, ZIP'i aç
-3. İçinden `GalleryWeb_x.y.z_x64-setup.exe` (NSIS kurulumu)
+**En kolay yol —** https://github.com/ihsandeniz/galleryweb/releases → en üstteki
+**`v1.1.0` (Draft)** → `GalleryWeb_1.1.0_x64-setup.exe` (227 MB).
+*Taslak sürümü yalnız sen görürsün; dışarıya kapalıdır.*
+
+Alternatif: https://github.com/ihsandeniz/galleryweb/actions → yeşil **CI** koşusu →
+**Artifacts** → `galleryweb-windows`.
 
 > Bu paket **imzasız**. Aşağıdaki 1. madde tam olarak bunu sınıyor — beklenen davranıştır.
 
@@ -99,3 +102,12 @@ Listeyi kopyalayıp yanına yazman yeterli. Özellikle şunları belirt:
 
 Bu liste tamamlanmadan `v1.1.0` yayınlanmayacak: paket imzasız ve gerçek bir Windows
 makinesinde hiç açılmadı. *"Kaynak yeşil ≠ ürün çalışıyor"* (Yuki v0.5.0 dersi).
+
+---
+
+## Liste geçtikten sonra (bende — 3 adım, ~5 dk)
+
+1. `gh release edit v1.1.0 --draft=false` → sürüm yayına girer
+2. `ihsan-web-site` reposunda `galleryweb-v1.1.0` dalını main'e al + push
+   (indirme linkleri o an canlıya çıkar — release'den ÖNCE push edilirse 404 verir)
+3. Sürüm notlarındaki yorum satırına gerçek makine doğrulaması eklenir
