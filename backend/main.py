@@ -676,6 +676,27 @@ async def get_images(
     }
 
 
+# Uzantı → MIME. Neden tablo tutuyoruz: Starlette `mimetypes` modülüne güvenir,
+# o da Windows'ta KAYIT DEFTERİNİ okur. `.webp`/`.heic`/`.avif` kayıtlı değilse
+# (CI imajında ve pek çok temiz Win10'da değil) yanıt `application/octet-stream`
+# olarak gider. Tarayıcılar görüntüyü çoğu zaman yine de tanır ama video için
+# `<video>` etiketi ve Range akışı bozulur, indirme diyaloğu çıkabilir.
+# Linux'ta /etc/mime.types dolu olduğu için bu hata orada HİÇ görünmüyordu.
+_MEDYA_TURLERI = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+    '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+    '.tiff': 'image/tiff', '.tif': 'image/tiff',
+    '.heic': 'image/heic', '.heif': 'image/heif', '.avif': 'image/avif',
+    '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+    '.mkv': 'video/x-matroska', '.m4v': 'video/x-m4v',
+}
+
+
+def _medya_turu(p: Path) -> str | None:
+    """Dosyanın MIME türü; bilinmiyorsa None (Starlette kendi tahminine düşer)."""
+    return _MEDYA_TURLERI.get(p.suffix.lower())
+
+
 @app.get("/api/image/{path:path}")
 async def serve_image(path: str, thumb: bool = False, w: int = 300):
     if not current_directories:
@@ -690,9 +711,9 @@ async def serve_image(path: str, thumb: bool = False, w: int = 300):
         # Okunamayan dosya için 500 DÖNMÜYORUZ: yer tutucu görsel + bilgilendirici
         # başlık. Aksi halde tek bozuk dosya galeri kutucuğunu sonsuza kadar
         # "yükleniyor" durumunda bırakıyordu.
-        return FileResponse(thumb_path,
+        return FileResponse(thumb_path, media_type="image/webp",
                             headers={"X-Thumb-Status": "ok" if okunabildi else "unreadable"})
-    return FileResponse(full_path)
+    return FileResponse(full_path, media_type=_medya_turu(full_path))
 
 
 @app.get("/api/metadata/{path:path}")

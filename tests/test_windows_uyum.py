@@ -121,11 +121,15 @@ def test_geri_yukleme_ayni_isimli_dosyayi_ezmez(istemci, galeri):
 # ── 3) Sürücü harfi / büyük-küçük harf tutarlılığı ────────────────────────────
 
 def test_dir_prefix_like_os_ayraci_kullanir():
+    """Desen, OS'un kendi ayracıyla bitmeli — yollar DB'ye o ayraçla yazılıyor.
+
+    Sabit '/' kullanmak Windows'ta klasör kapsamlı sorguları boş döndürüyordu
+    (2026-07-24'te kapatıldı; bu test nöbeti devraldı).
+    """
     from cache_manager import CacheManager
 
     desen = CacheManager._dir_prefix_like("/tmp/galeri")
-    assert desen.endswith("%")
-    assert os.sep in desen.replace("\\\\", "\x00")   # kaçışlanmış hâli de sayılır
+    assert desen.endswith(CacheManager._like_escape(os.sep) + "%")
 
 
 def test_klasor_kapsamli_sorgular_secilen_yol_biciminden_bagimsiz(istemci, galeri):
@@ -164,6 +168,31 @@ def test_ffmpeg_yoksa_trim_anlasilir_hata_verir(istemci, galeri, monkeypatch):
     r = istemci.post("/api/edit/video.mp4/trim", json={"start_ms": 0, "end_ms": 1000})
     assert r.status_code == 501, r.text
     assert "ffmpeg" in r.json()["detail"]
+
+
+# ── 6) MIME türleri (Windows kayıt defterine bağımlılık) ─────────────────────
+
+def test_medya_turu_uzantidan_belirleniyor():
+    from pathlib import Path
+
+    assert main._medya_turu(Path("a.webp")) == "image/webp"
+    assert main._medya_turu(Path("A.MP4")) == "video/mp4"
+    assert main._medya_turu(Path("a.heic")) == "image/heic"
+    assert main._medya_turu(Path("a.bilinmeyen")) is None
+
+
+def test_kucuk_resim_dogru_mime_ile_gelir(istemci):
+    """Windows'ta `.webp` kayıt defterinde olmadığı için Starlette
+    `application/octet-stream` gönderiyordu — CI bunu ilk turda yakaladı."""
+    r = istemci.get("/api/image/deneme.jpg?thumb=true&w=200")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "image/webp"
+
+
+def test_tam_boy_gorsel_dogru_mime_ile_gelir(istemci):
+    r = istemci.get("/api/image/deneme.jpg")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "image/jpeg"
 
 
 def test_konsol_penceresi_bayragi_platforma_gore():
