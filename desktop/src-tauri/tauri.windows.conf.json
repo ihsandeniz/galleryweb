@@ -2,7 +2,16 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "resources": {
-      "../dist/galleryweb-server.exe": "galleryweb-server.exe"
+      "../dist/galleryweb-server": "galleryweb-server"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      },
+      "nsis": {
+        "languages": ["Turkish", "English"],
+        "displayLanguageSelector": true
+      }
     }
   }
 }

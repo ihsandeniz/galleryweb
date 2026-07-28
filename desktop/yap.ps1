@@ -20,7 +20,8 @@ $ErrorActionPreference = "Stop"
 $DesktopDir = $PSScriptRoot
 $RepoDir    = Split-Path $DesktopDir -Parent
 $BuildVenv  = Join-Path $RepoDir ".build-venv"
-$ServerExe  = Join-Path $DesktopDir "dist\galleryweb-server.exe"
+# Windows'ta PyInstaller "onedir" üretir: dist\galleryweb-server\galleryweb-server.exe
+$ServerExe  = Join-Path $DesktopDir "dist\galleryweb-server\galleryweb-server.exe"
 
 function Renk($m) { Write-Host $m -ForegroundColor Cyan }
 function Hata($m) { Write-Host "HATA: $m" -ForegroundColor Red; exit 1 }
@@ -59,9 +60,10 @@ function Sunucu-Yap {
         & (Join-Path $BuildVenv "Scripts\pyinstaller.exe") galleryweb-server.spec `
             --noconfirm --distpath dist --workpath build --log-level WARN
     } finally { Pop-Location }
-    if (-not (Test-Path $ServerExe)) { Hata "Sunucu exe'si üretilemedi." }
-    $mb = [math]::Round((Get-Item $ServerExe).Length / 1MB, 1)
-    Renk "  + $ServerExe ($mb MB)"
+    if (-not (Test-Path $ServerExe)) { Hata "Sunucu exe'si üretilemedi: $ServerExe" }
+    $klasor = Split-Path $ServerExe -Parent
+    $mb = [math]::Round(((Get-ChildItem $klasor -Recurse -File | Measure-Object Length -Sum).Sum) / 1MB, 1)
+    Renk "  + $klasor ($mb MB, klasör)"
 }
 
 function Uygulama-Yap {
