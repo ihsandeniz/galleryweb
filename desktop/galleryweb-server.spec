@@ -4,16 +4,27 @@
 Çalıştırma:
     cd desktop && ../.build-venv/bin/pyinstaller galleryweb-server.spec --noconfirm
 
-Çıktı: desktop/dist/galleryweb-server  (tek dosya, Python kurulumu gerektirmez)
+Çıktı:
+    Linux/macOS → desktop/dist/galleryweb-server            (tek dosya)
+    Windows     → desktop/dist/galleryweb-server/…exe       (klasör, "onedir")
+
+Neden Windows'ta klasör? Tek-dosya paket her AÇILIŞTA ~55 MB'ı `%TEMP%`'e
+açar: Defender bunu her seferinde baştan tarar, açılış saniyeler sürer ve
+kabuğun 30 sn'lik "sunucu hazır" tavanı zorlanır. Ayrıca kendini geçici
+dizine açan tek-dosya exe'ler virüs tarayıcılarında yanlış pozitife yatkındır.
+Klasör düzeninde açma adımı hiç yoktur — dosyalar diskte zaten durur.
+Linux'ta AppImage kendisi bir kap olduğu için tek-dosya kalıyor.
 
 Sadece YEREL mod paketlenir: `backend/main.py` bağımsızdır — Supabase/pgvector/CLIP
 import etmez. Bulut modu (main_saas.py) kasıtlı olarak dışarıda; onu da almak
 paket boyutunu ~2.5GB'a çıkarırdı.
 """
+import sys
 from pathlib import Path
 
 REPO = Path(SPECPATH).parent
 BACKEND = REPO / "backend"
+WINDOWS = sys.platform == "win32"
 
 a = Analysis(
     [str(BACKEND / "main.py")],
@@ -57,9 +68,11 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
+    # Windows'ta ikili dosyalar/veriler exe'nin İÇİNE gömülmez; COLLECT ile yan
+    # klasöre konur (onedir). `exclude_binaries` bu ayrımı yapan anahtardır.
+    *([] if WINDOWS else [a.binaries, a.datas]),
     [],
+    exclude_binaries=WINDOWS,
     name="galleryweb-server",
     debug=False,
     bootloader_ignore_signals=False,
@@ -71,3 +84,14 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+if WINDOWS:
+    # dist/galleryweb-server/galleryweb-server.exe + _internal/…
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=False,
+        name="galleryweb-server",
+    )

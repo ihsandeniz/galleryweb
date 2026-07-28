@@ -80,20 +80,38 @@ fn resolve_server_binary(app: &tauri::AppHandle) -> Option<PathBuf> {
         }
     }
     if let Ok(dir) = app.path().resource_dir() {
-        // Düz ad (tauri.conf.json'daki eşleme) + Tauri'nin üst-dizin kaynakları için
-        // ürettiği `_up_/…` düzeni. İkincisi olmadan, dist/ klasörü duran GELİŞTİRME
-        // makinesinde sorun görünmüyor ama temiz kurulumda uygulama açılmıyordu.
-        for aday in [dir.join(name), dir.join("_up_").join("dist").join(name)] {
+        // Dört düzeni de dene — hangisinin çıkacağı platforma VE PyInstaller
+        // biçimine bağlı, ikisi de sessizce değişebilir:
+        //  1. düz ad            → tauri.conf.json eşlemesi, tek dosya (Linux)
+        //  2. `_up_/dist/…`     → Tauri'nin ÜST-DİZİN kaynakları için ürettiği düzen.
+        //                         Bu olmadan, dist/ klasörü duran GELİŞTİRME makinesinde
+        //                         sorun görünmüyor ama TEMİZ kurulumda uygulama açılmıyordu.
+        //  3-4. aynı ikisinin klasör (onedir) hâli → Windows: exe artık kendi
+        //                         klasöründe durur (bkz. galleryweb-server.spec).
+        let kok = "galleryweb-server";
+        for aday in [
+            dir.join(name),
+            dir.join("_up_").join("dist").join(name),
+            dir.join(kok).join(name),
+            dir.join("_up_").join("dist").join(kok).join(name),
+        ] {
             if aday.is_file() {
                 return Some(aday);
             }
         }
     }
     // Geliştirme: src-tauri/target/... yerine repo içindeki dist/
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|d| d.join("dist").join(name));
-    dev.filter(|p| p.is_file())
+        .map(|d| d.join("dist"));
+    if let Some(dist) = dist {
+        for aday in [dist.join(name), dist.join("galleryweb-server").join(name)] {
+            if aday.is_file() {
+                return Some(aday);
+            }
+        }
+    }
+    None
 }
 
 /// Sunucu ayağa kalkana kadar bekle (TCP bağlanabiliyor mu?).

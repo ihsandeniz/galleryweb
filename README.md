@@ -35,7 +35,29 @@ The **same codebase** powers both. Local mode is the default and needs zero exte
 
 ## Quick start — Self-host (no login)
 
-### Option A · One click (easiest — no terminal knowledge needed)
+### Option A · Desktop app (Windows · Linux)
+
+Grab an installer from **[Releases](https://github.com/ihsandeniz/galleryweb/releases)** —
+no Python, no terminal, no browser tab:
+
+| Platform | File | Notes |
+|---|---|---|
+| **Windows 10 / 11** | `GalleryWeb_x.y.z_x64-setup.exe` | Includes the WebView2 runtime — installs without internet |
+| **Linux** | `.AppImage` (portable) or `.deb` | AppImage: `chmod +x` then run |
+
+> **Windows: “Windows protected your PC”** — the installer is **unsigned** (a code-signing
+> certificate costs $200–400/year and this is a free, open-source project). Click
+> **More info → Run anyway**. You can verify what you're running: the package is built
+> in public by [GitHub Actions](https://github.com/ihsandeniz/galleryweb/actions) from
+> this repository, not on a developer's machine.
+
+> 🇹🇷 **Windows'ta “Windows bilgisayarınızı korudu” uyarısı normaldir** — paket imzasızdır
+> (sertifika yıllık $200-400, bu ücretsiz açık kaynak bir proje). **Ek bilgi → Yine de
+> çalıştır** deyin. Paket GitHub Actions'ta herkesin görebileceği şekilde derleniyor.
+
+**Video trimming** additionally needs `ffmpeg` on your system; everything else works without it.
+
+### Option B · One click, from source (no terminal knowledge needed)
 
 Download the project, then **double-click** the launcher for your system:
 
@@ -57,7 +79,7 @@ indirir; fotoğraflarınız, ayarlarınız ve sanal ortamınız korunur. Sonraki
 yani güncelleme için hiçbir şeyi silmenize gerek yok. (git ile klonladıysanız
 `run` zaten açılışta otomatik `git pull` yapar.)
 
-### Option B · Python by hand (zero extra services)
+### Option C · Python by hand (zero extra services)
 
 ```bash
 git clone https://github.com/ihsandeniz/galleryweb.git
@@ -70,7 +92,7 @@ Then open `http://localhost:5000`, click **Klasör Aç / Open Folder**, and pick
 
 > **Video editing** needs `ffmpeg` on your system (`apt install ffmpeg` / `brew install ffmpeg` / `pacman -S ffmpeg`).
 
-### Option C · Docker (no Python needed)
+### Option D · Docker (no Python needed)
 
 ```bash
 git clone https://github.com/ihsandeniz/galleryweb.git
@@ -92,6 +114,9 @@ Inside the app, open the `/photos` folder. `ffmpeg` is already included in the i
 | **HEIC / iPhone photos don't open** | The `pillow-heif` dependency covers this — reinstall with `pip install -r backend/requirements-selfhost.txt`. |
 | **`python: command not found`** | Install [Python 3.10+](https://www.python.org/downloads/). On Windows, tick **"Add Python to PATH"** during install. |
 | **Phone can't reach the gallery** | Network access is off by default. Start with `GALLERYWEB_LAN=1`, then use the `📱 Telefon erişimi:` URL it prints, and make sure the phone is on the **same Wi-Fi**. |
+| **Phone says “connection timed out”** | That's a **firewall**, not a bug — the server is listening correctly but packets are dropped. The app shows the exact command to fix it. Windows (run as **Administrator**): `netsh advfirewall firewall add rule name="GalleryWeb" dir=in action=allow protocol=TCP localport=5000`. Linux: see the 🧱 box in the app. |
+| **Windows: editing a photo does nothing** | Check Defender's **Controlled folder access** (Ransomware protection). It blocks writes to `Pictures`/`Documents` for unrecognised apps — usually *silently*. Either allow GalleryWeb or keep photos in an unprotected folder. |
+| **Windows: “file is used by another program”** | Windows won't move an open file. Stop video playback (or close the other program) and retry — the app deliberately refuses rather than pretending it deleted the file. |
 | **Want developer auto-reload** | `GALLERYWEB_DEV=1 python main.py` (off by default for faster startup). |
 
 ---

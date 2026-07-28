@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'faz-w**']
   pull_request:
     branches: [main]
+  workflow_dispatch:
   schedule:
     - cron: '0 6 * * 1' # her Pazartesi 06:00 UTC — dependency-scan için
 
@@ -25,54 +26,109 @@ jobs:
       - name: Run pip-audit
         run: pip-audit -r backend/requirements.txt
 
-  backend-test:
-    name: Backend Tests
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: galleryweb
-          POSTGRES_PASSWORD: testpassword
-          POSTGRES_DB: galleryweb_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+  yerel-test:
+    name: Yerel mod testleri (${{ matrix.os }})
+    # Aynı test paketi iki işletim sisteminde de koşar. FAZ W'nin çekirdek fikri
+    # bu: "Windows'ta sessizce yanlış" hataları ancak GERÇEK Windows'ta görünür,
+    # statik denetim ve Linux CI ikisi de onları kaçırıyordu.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
-      - name: Install dependencies
+      - name: Bağımlılıklar
         run: |
-          pip install -r backend/requirements.txt
-          pip install pytest pytest-asyncio httpx
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-selfhost.txt
+          pip install pytest httpx
 
-      - name: Run tests
-        env:
-          APP_ENV: test
-          DATABASE_URL: postgresql://galleryweb:testpassword@localhost:5432/galleryweb_test
-          APP_SECRET_KEY: test-secret-key-not-for-production
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'http://localhost:54321' }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'test-anon-key' }}
-        run: |
-          cd backend
-          python -m pytest tests/ -v --tb=short 2>/dev/null || echo "No tests found yet — Faz 1'de eklenecek"
+      - name: Uzun yol desteğini aç (Windows)
+        if: runner.os == 'Windows'
+        # Test 260 karakterden UZUN yollar kuruyor. `\\?\` öneki uygulamanın
+        # kendi kodunda var; bu ayar test fikstürlerinin (git checkout, temizlik)
+        # aynı sınıra takılmaması için.
+        run: git config --system core.longpaths true
+
+      - name: Testler
+        run: python -m pytest tests/ -v --tb=short
 
       - name: Lint (ruff)
+        if: runner.os == 'Linux'
         run: |
           pip install ruff
           ruff check backend/ --ignore E501 || true
+
+  windows-paket:
+    name: Windows paketi (exe + kurulum)
+    needs: yerel-test
+    runs-on: windows-latest
+    # W0'ın asıl amacı: Windows paketi ihsan'ın makinesinde değil, burada üretilsin.
+    # `yap.ps1` CI'da da kullanıcıdakiyle AYNI betiktir — betiğin kendisi de sınanır.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sunucu paketi (PyInstaller · onedir)
+        run: .\desktop\yap.ps1 sunucu
+
+      - name: Paket duman testi (gerçek exe çalıştırılır)
+        run: |
+          pip install Pillow
+          python tests\paket_duman_testi.py desktop\dist\galleryweb-server\galleryweb-server.exe
+
+      - name: Rust araç zinciri
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: cargo-tauri
+        run: cargo install tauri-cli --version "^2.0" --locked
+
+      - name: Masaüstü uygulaması + NSIS kurulumu
+        run: |
+          cd desktop\src-tauri
+          cargo tauri build
+
+      - name: Kurulum paketinin içeriğini doğrula
+        # Tauri'nin kaynak eşlemesi sessizce değişebilir (`_up_/dist/…` dersi,
+        # 2026-07-26). Kurulumu açıp sunucu exe'sinin GERÇEKTEN paketlendiğini
+        # doğrulamazsak, "derleme başarılı" diyen yeşil bir CI ile açılmayan bir
+        # uygulama yan yana yaşayabilir.
+        shell: pwsh
+        run: |
+          $nsis = Get-ChildItem desktop\src-tauri\target\release\bundle\nsis\*.exe | Select-Object -First 1
+          if (-not $nsis) { throw "NSIS kurulum paketi üretilmedi" }
+          Write-Host "Kurulum paketi: $($nsis.FullName) ($([math]::Round($nsis.Length/1MB,1)) MB)"
+          & 7z x $nsis.FullName -o"$env:RUNNER_TEMP\nsis-ac" -y | Out-Null
+          $sunucu = Get-ChildItem "$env:RUNNER_TEMP\nsis-ac" -Recurse -Filter galleryweb-server.exe
+          if (-not $sunucu) { throw "galleryweb-server.exe kurulum paketinde YOK — kaynak eşlemesi bozuk" }
+          Write-Host "✓ sunucu paketin içinde: $($sunucu[0].FullName)"
+          $ic = Get-ChildItem (Split-Path $sunucu[0].FullName) -Filter _internal -Directory
+          if (-not $ic) { throw "_internal klasörü yok — onedir düzeni bozuk" }
+          Write-Host "✓ onedir düzeni sağlam"
+
+      - name: Windows paketlerini yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: galleryweb-windows
+          retention-days: 30
+          path: |
+            desktop/src-tauri/target/release/bundle/nsis/*.exe
+            desktop/src-tauri/target/release/GalleryWeb.exe
 
   frontend-lint:
     name: Frontend Lint
@@ -81,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check HTML validity
+      - name: JavaScript sözdizimi
         run: |
-          echo "Frontend lint — Faz 4'te ESLint eklenecek"
-          ls frontend/
+          for f in frontend/js/*.js; do node --check "$f"; done
+          echo "✓ tüm JS dosyaları geçerli"

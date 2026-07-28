@@ -125,6 +125,11 @@ class ThumbnailGenerator:
             return thumb_path, False
         return thumb_path, True
 
+    # Paketlenmiş Windows uygulamasında her ffmpeg çağrısı siyah bir konsol
+    # penceresi açıp kapatır. 20 videoluk bir klasörde bu, kullanıcının önünde
+    # 20 kez yanıp sönen pencere demek — uygulama virüs gibi görünür.
+    _NO_WINDOW = 0x0800_0000 if os.name == "nt" else 0
+
     @staticmethod
     def _ffmpeg_thumb(video_path: Path, thumb_path: Path):
         try:
@@ -133,7 +138,8 @@ class ThumbnailGenerator:
                 '-ss', '00:00:01', '-vframes', '1',
                 '-vf', 'scale=300:300:force_original_aspect_ratio=decrease',
                 '-y', str(thumb_path)
-            ], capture_output=True, timeout=30)
+            ], capture_output=True, timeout=30,
+                creationflags=ThumbnailGenerator._NO_WINDOW)
         except Exception as e:
             print(f"ffmpeg thumbnail hatası: {video_path} - {e}")
 

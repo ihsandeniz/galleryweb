@@ -61,6 +61,31 @@ else:
         # Gerçekten ağa açıldığında __main__ bloğu yazdırır.
         _origins.append(f"http://{_local_ip}:{_PORT}")
 
+def _akisi_utf8_yap(akis) -> None:
+    """Bir çıktı akışını UTF-8'e çevir (çevrilemiyorsa sessizce geç).
+
+    Windows'ta `sys.stdout`'un kodlaması konsolun kod sayfasıdır (en-US'ta
+    cp1252, TR'de cp857) — ve `print("⚠️ Sunucu AĞA AÇIK")` orada
+    `UnicodeEncodeError` FIRLATIR. Bu bir günlük satırı değil, çıplak `print`
+    olduğu için istisna yakalanmaz: kullanıcı telefon erişimini açtığı anda
+    sunucu çökerdi. Aynı tuzak `ğ`/`ş` içeren her mesaj için geçerli, çünkü bu
+    harfler cp1252'de YOKTUR.
+
+    `errors="replace"`: kodlanamayan karakter yüzünden bir daha asla çökme —
+    en kötü ihtimalle soru işareti görünür.
+    """
+    try:
+        kodlama = (getattr(akis, "encoding", "") or "").lower().replace("-", "")
+        if kodlama != "utf8":
+            akis.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
+
+
+for _akis in (sys.stdout, sys.stderr):
+    _akisi_utf8_yap(_akis)
+
+
 def _user_data_dir() -> Path:
     """Yazılabilir kullanıcı veri dizini (masaüstü paketi için).
 
@@ -89,13 +114,112 @@ if _FROZEN:
 else:
     BASE_DIR = Path(__file__).parent.parent
     FRONTEND_DIR = BASE_DIR / "frontend"
-    CACHE_DIR = BASE_DIR / "cache"
+    # GALLERYWEB_DATA_DIR verilmişse önbellek de oraya gider. Kaynaktan çalışırken
+    # varsayılan repo içindeki `cache/`; testler bunu geçici bir dizine yönlendirip
+    # geliştirme veritabanını kirletmiyor (ağ tercihi zaten aynı kuralı izliyordu).
+    CACHE_DIR = (_user_data_dir() / "cache") if os.getenv("GALLERYWEB_DATA_DIR") else (BASE_DIR / "cache")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Global state
 current_directories: list[Path] = []   # Faz 5.2 — multi-folder support
 cache_manager = CacheManager(str(CACHE_DIR / "thumbnails.db"))
 thumbnail_gen = ThumbnailGenerator(cache_manager, cache_dir=CACHE_DIR / "thumbnails")
+
+
+# ── Windows uyum katmanı (FAZ W) ──────────────────────────────────────────────
+#
+# Bu bölümdeki dördü de "Linux'ta sorunsuz, Windows'ta sessizce yanlış" sınıfından:
+# hiçbiri istisna fırlatıp kendini göstermiyor, kullanıcı sadece işin OLMADIĞINI
+# görüyor. Sebebi de bu: Windows testi olmadan HTTP-200 duman testi hepsini geçer.
+
+_WIN = os.name == "nt"
+
+# Paketlenmiş uygulamada alt süreçler (ffmpeg, netsh) siyah bir konsol penceresi
+# açar ve kullanıcının önünde yanıp söner. Küçük resim havuzu her video için bir
+# ffmpeg çalıştırdığından bu, 20 videoluk klasörde 20 pencere demek.
+_NO_WINDOW = 0x0800_0000 if _WIN else 0   # CREATE_NO_WINDOW
+
+# Windows'ta MAX_PATH = 260 tarihî bir kalıntı değil, canlı bir hata kaynağı:
+# sınırı aşan yola yazmak `FileNotFoundError` verir. Düzenleme sidecar'ı
+# (`.gallery_edits/<ad>.json`) fotoğrafın kendi yolundan ~20 karakter UZUNDUR —
+# yani fotoğraf açılır, düzenlenir, sonra kayıt sessizce düşer. `\\?\` öneki
+# sınırı kaldırır ve kayıt defteri ayarı / exe manifesti gerektirmez.
+_UZUN_YOL_ESIGI = 200
+
+
+def _lp(p) -> str:
+    """Windows'ta uzun yolu `\\\\?\\` biçimine çevirir; diğer platformlarda dokunmaz."""
+    s = str(p)
+    if not _WIN or len(s) < _UZUN_YOL_ESIGI or s.startswith("\\\\?\\"):
+        return s
+    s = os.path.abspath(s)          # `\\?\` yalnız mutlak + normalize yolu kabul eder
+    if s.startswith("\\\\"):        # ağ paylaşımı (UNC): \\sunucu\pay → \\?\UNC\sunucu\pay
+        return "\\\\?\\UNC\\" + s[2:]
+    return "\\\\?\\" + s
+
+
+def _mkdir(p) -> None:
+    """Uzun yol güvenli klasör oluşturma (`Path.mkdir` uzun yolda düşer)."""
+    os.makedirs(_lp(p), exist_ok=True)
+
+
+def _kilitli_mi(e: OSError) -> bool:
+    """Windows: dosya başka bir süreç tarafından açık mı tutuluyor?
+
+    32 = ERROR_SHARING_VIOLATION · 33 = ERROR_LOCK_VIOLATION
+    """
+    return getattr(e, "winerror", None) in (32, 33)
+
+
+def _tasi(src, dst) -> None:
+    """Dosya taşı — Windows'ta kilit çakışmasında kısa süre yeniden dener.
+
+    Windows açık bir dosyayı taşıtmaz/sildirmez. Lightbox'ta video oynarken
+    (Range istekleri dosya tanıtıcısını açık tutar), küçük resim üretilirken ya
+    da virüs tarayıcısı dosyaya bakarken silme `WinError 32` ile düşer. Bu
+    tanıtıcıların çoğu birkaç yüz milisaniyede kapanır; kalıcı olanı çağırana
+    OSError olarak döner — orada kullanıcıya "dosya başka bir programda açık"
+    denir, sessizce "silindi" DENMEZ.
+    """
+    for deneme in range(4):
+        try:
+            os.replace(_lp(src), _lp(dst))
+            return
+        except OSError as e:
+            if not (_WIN and _kilitli_mi(e) and deneme < 3):
+                raise
+            _time.sleep(0.15 * (deneme + 1))
+
+
+def _kilit_hatasi(e: OSError, fiil: str) -> HTTPException:
+    """Kilit hatasını kullanıcının anlayacağı 409'a çevir, diğerlerini 500'e."""
+    if _kilitli_mi(e):
+        return HTTPException(409, f"Dosya başka bir program tarafından kullanılıyor, "
+                                  f"{fiil} yapılamadı. Video oynuyorsa durdurup tekrar deneyin.")
+    return HTTPException(500, f"Dosya {fiil} başarısız: {e}")
+
+
+def _kanonik(p) -> Path:
+    """Seçilen klasörü tek bir kanonik biçime indir.
+
+    Neden gerekli: fotoğraf yolları veritabanına HER ZAMAN `.resolve()` edilmiş
+    hâlleriyle yazılıyor (bkz. `find_in_directories`), ama klasör-kapsamlı
+    sorgular (etiket listesi, çöp kutusu, puanlar) seçilen klasörün HAM hâlini
+    LIKE öneki yapıyordu. İkisi ayrışırsa sorgu boş döner — istisna yok, hata
+    yok, sadece "etiketlerim kayboldu".
+
+    • Windows: `C:\\Users\\…` ile `c:\\users\\…` ayrı dizeler. `resolve()`
+      diskteki gerçek büyük-küçük harfi getirir → iki taraf da aynı olur.
+    • Linux/macOS: sembolik bağla seçilen klasör (`~/Resimler` → başka disk)
+      aynı ayrışmayı yaratıyordu; `resolve()` bunu da kapatır.
+
+    Çözülemezse (ağ sürücüsü kopuk vb.) ham yolla devam et — galeriyi açmamak
+    yerine eski davranışa düşmek yeğdir.
+    """
+    try:
+        return Path(p).resolve()
+    except OSError:
+        return Path(p)
 
 
 # ── Multi-folder helpers ──────────────────────────────────────────────────────
@@ -394,7 +518,7 @@ async def set_directory(data: dict):
         current_directory = p
         return {"status": "fallback", "path": fallback, "directories": [fallback],
                 "warning": f"'{path}' bulunamadı, ana dizine geçildi"}
-    p = Path(path)
+    p = _kanonik(path)
     current_directories = [p]
     current_directory = p
     return {"status": "success", "path": str(p), "directories": [str(p)]}
@@ -410,7 +534,7 @@ async def add_directory(data: dict):
     path = os.path.expanduser(path.strip())
     if not os.path.isdir(path):
         raise HTTPException(400, f"Geçersiz klasör yolu: {path}")
-    p = Path(path)
+    p = _kanonik(path)
     if p not in current_directories:
         current_directories.append(p)
     if not current_directory:
@@ -425,7 +549,7 @@ async def remove_directory(data: dict):
     path = data.get("path")
     if not path:
         raise HTTPException(400, "Geçersiz klasör yolu")
-    p = Path(os.path.expanduser(path.strip()))
+    p = _kanonik(os.path.expanduser(path.strip()))
     current_directories = [d for d in current_directories if d != p]
     current_directory = current_directories[0] if current_directories else None
     return {"status": "success", "directories": [str(d) for d in current_directories]}
@@ -577,6 +701,27 @@ async def get_images(
     }
 
 
+# Uzantı → MIME. Neden tablo tutuyoruz: Starlette `mimetypes` modülüne güvenir,
+# o da Windows'ta KAYIT DEFTERİNİ okur. `.webp`/`.heic`/`.avif` kayıtlı değilse
+# (CI imajında ve pek çok temiz Win10'da değil) yanıt `application/octet-stream`
+# olarak gider. Tarayıcılar görüntüyü çoğu zaman yine de tanır ama video için
+# `<video>` etiketi ve Range akışı bozulur, indirme diyaloğu çıkabilir.
+# Linux'ta /etc/mime.types dolu olduğu için bu hata orada HİÇ görünmüyordu.
+_MEDYA_TURLERI = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+    '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+    '.tiff': 'image/tiff', '.tif': 'image/tiff',
+    '.heic': 'image/heic', '.heif': 'image/heif', '.avif': 'image/avif',
+    '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+    '.mkv': 'video/x-matroska', '.m4v': 'video/x-m4v',
+}
+
+
+def _medya_turu(p: Path) -> str | None:
+    """Dosyanın MIME türü; bilinmiyorsa None (Starlette kendi tahminine düşer)."""
+    return _MEDYA_TURLERI.get(p.suffix.lower())
+
+
 @app.get("/api/image/{path:path}")
 async def serve_image(path: str, thumb: bool = False, w: int = 300):
     if not current_directories:
@@ -591,9 +736,9 @@ async def serve_image(path: str, thumb: bool = False, w: int = 300):
         # Okunamayan dosya için 500 DÖNMÜYORUZ: yer tutucu görsel + bilgilendirici
         # başlık. Aksi halde tek bozuk dosya galeri kutucuğunu sonsuza kadar
         # "yükleniyor" durumunda bırakıyordu.
-        return FileResponse(thumb_path,
+        return FileResponse(thumb_path, media_type="image/webp",
                             headers={"X-Thumb-Status": "ok" if okunabildi else "unreadable"})
-    return FileResponse(full_path)
+    return FileResponse(full_path, media_type=_medya_turu(full_path))
 
 
 @app.get("/api/metadata/{path:path}")
@@ -639,17 +784,17 @@ async def delete_image(path: str):
 
     base = _dir_for_path(full_path) or current_directories[0]
     trash_dir = base / ".gallery_trash"
-    trash_dir.mkdir(exist_ok=True)
+    _mkdir(trash_dir)
 
     timestamp = int(time.time() * 1000)
     trash_path = trash_dir / f"{timestamp}_{full_path.name}"
     try:
-        full_path.rename(trash_path)
+        _tasi(full_path, trash_path)
     except FileNotFoundError:
         raise HTTPException(404, "Dosya taşınırken bulunamadı")
     except OSError as e:
         logger.error("delete_image rename failed: %s", e)
-        raise HTTPException(500, f"Dosya taşıma başarısız: {e}")
+        raise _kilit_hatasi(e, "silme")
 
     trash_id = cache_manager.add_to_trash(str(full_path), str(trash_path))
     return {"trash_id": trash_id, "filename": full_path.name}
@@ -665,12 +810,16 @@ async def restore_image(trash_id: int):
     op = Path(original_path)
     if not tp.exists():
         raise HTTPException(404, "Dosya çöp kutusunda bulunamadı")
-    op.parent.mkdir(parents=True, exist_ok=True)
+    if op.exists():
+        # Eskiden burada sessiz üzerine-yazma vardı (POSIX rename semantiği):
+        # aynı adla yeni bir fotoğraf konmuşsa geri yükleme onu yok ediyordu.
+        raise HTTPException(409, f"'{op.name}' zaten var — geri yüklemeden önce taşıyın veya yeniden adlandırın")
+    _mkdir(op.parent)
     try:
-        tp.rename(op)
+        _tasi(tp, op)
     except OSError as e:
         logger.error("restore_image rename failed: %s", e)
-        raise HTTPException(500, f"Dosya geri yükleme başarısız: {e}")
+        raise _kilit_hatasi(e, "geri yükleme")
     return {"status": "restored", "filename": op.name}
 
 
@@ -808,17 +957,17 @@ async def batch_delete(data: dict):
                 continue
             base = _dir_for_path(full_path) or current_directories[0]
             trash_dir = base / ".gallery_trash"
-            trash_dir.mkdir(exist_ok=True)
+            _mkdir(trash_dir)
             timestamp = int(time.time() * 1000)
             trash_path = trash_dir / f"{timestamp}_{idx:04d}_{full_path.name}"
             try:
-                full_path.rename(trash_path)
+                _tasi(full_path, trash_path)
             except FileNotFoundError:
                 errors.append({"path": path, "error": "Dosya taşınırken bulunamadı"})
                 continue
             except OSError as e:
                 logger.error("batch_delete rename failed: %s", e)
-                errors.append({"path": path, "error": str(e)})
+                errors.append({"path": path, "error": _kilit_hatasi(e, "silme").detail})
                 continue
             trash_id = cache_manager.add_to_trash(str(full_path), str(trash_path))
             results.append({"path": path, "trash_id": trash_id, "filename": full_path.name})
@@ -1586,6 +1735,58 @@ _calisan_host: dict = {"host": "127.0.0.1", "server": None, "yeniden_baglan": No
 _guvenlik_duvari_onbellek: dict = {}
 
 
+def _guvenlik_duvari_windows() -> dict:
+    """Windows Defender Güvenlik Duvarı — telefon erişiminin sessiz katili.
+
+    ihsan'ın nftables tuzağının birebir Windows kopyası: sunucu `0.0.0.0`'ı
+    doğru dinler, telefonda görünen tek şey "bağlantı zaman aşımı" olur.
+    Windows'ta durum Linux'tan DAHA kötü: gelen bağlantılar varsayılan olarak
+    engellidir ve normalde çıkan "ağ erişimine izin ver" penceresi, masaüstü
+    kabuğu sunucuyu `CREATE_NO_WINDOW` ile başlattığı için hiç görünmeyebilir.
+
+    Bu yüzden burada Linux'takinden farklı bir varsayılan seçiyoruz: tespit
+    edemezsek de `aktif=True` deyip komutu gösteriyoruz. Yanlış pozitifin
+    bedeli gereksiz bir bilgi kutusu; yanlış negatifin bedeli ise kullanıcının
+    "uygulama bozuk" deyip bırakması.
+
+    `netsh` çıktısı yerelleştirilmiştir (TR Windows "Açık/Kapalı" yazar), bu
+    yüzden metin eşleştirmeye güvenilmez — sadece net bir "kapalı" sinyali
+    görürsek kutuyu gizliyoruz.
+    """
+    if _guvenlik_duvari_onbellek:
+        return _guvenlik_duvari_onbellek
+
+    acik = True
+    try:
+        r = subprocess.run(["netsh", "advfirewall", "show", "currentprofile", "state"],
+                           capture_output=True, text=True, timeout=4,
+                           creationflags=_NO_WINDOW)
+        satir = " ".join((r.stdout or "").upper().split())
+        kapali = any(k in satir for k in ("STATE OFF", "DURUM KAPALI", "DURUMU KAPALI"))
+        if r.returncode == 0 and kapali:
+            acik = False
+    except (OSError, subprocess.SubprocessError):
+        pass  # netsh yoksa/yanıt vermezse yol göstermeye devam
+
+    if not acik:
+        _guvenlik_duvari_onbellek.update({"aktif": False})
+        return _guvenlik_duvari_onbellek
+
+    _guvenlik_duvari_onbellek.update({
+        "aktif": True,
+        "tur": "Windows Defender Güvenlik Duvarı",
+        # Tek satır, kopyala-yapıştır. `netsh` YÖNETİCİ hakkı ister; kural adı
+        # sabit tutuldu ki kullanıcı sonradan aynı adla silebilsin:
+        #   netsh advfirewall firewall delete rule name="GalleryWeb"
+        "komut": (f'netsh advfirewall firewall add rule name="GalleryWeb" '
+                  f'dir=in action=allow protocol=TCP localport={_PORT}'),
+        "yonetici": True,
+        "not": "Yönetici olarak açtığınız Komut İstemi'nde çalıştırın "
+               "(Başlat → cmd → sağ tık → Yönetici olarak çalıştır).",
+    })
+    return _guvenlik_duvari_onbellek
+
+
 def _guvenlik_duvari() -> dict:
     """Makinede aktif bir güvenlik duvarı var mı — ve varsa portu nasıl açılır?
 
@@ -1595,6 +1796,8 @@ def _guvenlik_duvari() -> dict:
     ama güvenlik duvarının varsayılan `drop` politikası paketi düşürüyor —
     telefonda görünen tek şey sessiz bir "bağlantı zaman aşımı" oluyor.
     """
+    if _WIN:
+        return _guvenlik_duvari_windows()
     if sys.platform != "linux":
         return {"aktif": False}
     if _guvenlik_duvari_onbellek:
@@ -1834,7 +2037,7 @@ def _original_path(full_path: Path) -> Path:
 
 def _sha256(p: Path) -> str:
     h = hashlib.sha256()
-    with open(p, 'rb') as f:
+    with open(_lp(p), 'rb') as f:
         for block in iter(lambda: f.read(1 << 20), b''):
             h.update(block)
     return h.hexdigest()
@@ -1855,7 +2058,7 @@ def _is_stale(full_path: Path, chain: dict) -> bool:
     if not chain.get("ops") or not render:
         return False
     try:
-        st = full_path.stat()
+        st = os.stat(_lp(full_path))
     except OSError:
         return True
     if st.st_size == render.get("size") and int(st.st_mtime) == render.get("mtime"):
@@ -1865,9 +2068,10 @@ def _is_stale(full_path: Path, chain: dict) -> bool:
 
 def _load_chain(full_path: Path) -> dict:
     sc = _sidecar_path(full_path)
-    if sc.exists():
+    if os.path.exists(_lp(sc)):
         try:
-            data = json.loads(sc.read_text(encoding='utf-8'))
+            with open(_lp(sc), encoding='utf-8') as f:
+                data = json.load(f)
             data.setdefault("ops", [])
             data.setdefault("cursor", len(data["ops"]))
             data["cursor"] = max(0, min(int(data["cursor"]), len(data["ops"])))
@@ -1884,19 +2088,20 @@ def _load_chain(full_path: Path) -> dict:
 def _discard_chain(full_path: Path) -> None:
     """Sidecar + legacy temeli sil (zincir geçersizleştiğinde)."""
     for stale in (_sidecar_path(full_path), _legacy_base_path(full_path)):
-        if stale.exists():
+        if os.path.exists(_lp(stale)):
             try:
-                stale.unlink()
+                os.unlink(_lp(stale))
             except OSError as e:
                 logger.warning("Zincir dosyası silinemedi (%s): %s", stale, e)
 
 
 def _save_chain(full_path: Path, chain: dict) -> None:
     sc = _sidecar_path(full_path)
-    sc.parent.mkdir(exist_ok=True)
+    _mkdir(sc.parent)
     tmp = sc.with_suffix(sc.suffix + '.tmp')
-    tmp.write_text(json.dumps(chain, ensure_ascii=False, indent=1), encoding='utf-8')
-    tmp.replace(sc)
+    with open(_lp(tmp), 'w', encoding='utf-8') as f:
+        json.dump(chain, f, ensure_ascii=False, indent=1)
+    os.replace(_lp(tmp), _lp(sc))
 
 
 def _legacy_base_path(full_path: Path) -> Path:
@@ -1913,25 +2118,25 @@ def _ensure_base(full_path: Path, chain: dict) -> Path:
       orijinale döner.
     """
     orig = _original_path(full_path)
-    if not orig.exists():
-        orig.parent.mkdir(exist_ok=True)
+    if not os.path.exists(_lp(orig)):
+        _mkdir(orig.parent)
         import shutil as _shutil
-        _shutil.copy2(full_path, orig)
+        _shutil.copy2(_lp(full_path), _lp(orig))
         return orig
 
     if chain.get("legacy_base"):
         lb = _legacy_base_path(full_path)
-        if lb.exists():
+        if os.path.exists(_lp(lb)):
             return lb
 
-    if not _sidecar_path(full_path).exists():
-        differs = (full_path.stat().st_size != orig.stat().st_size
+    if not os.path.exists(_lp(_sidecar_path(full_path))):
+        differs = (os.stat(_lp(full_path)).st_size != os.stat(_lp(orig)).st_size
                    or _sha256(full_path) != _sha256(orig))
         if differs:
             lb = _legacy_base_path(full_path)
-            lb.parent.mkdir(exist_ok=True)
+            _mkdir(lb.parent)
             import shutil as _shutil
-            _shutil.copy2(full_path, lb)
+            _shutil.copy2(_lp(full_path), _lp(lb))
             chain["legacy_base"] = True
             return lb
     return orig
@@ -2017,7 +2222,7 @@ def _render_chain(full_path: Path, chain: dict) -> None:
     base = _ensure_base(full_path, chain)
     ops = chain["ops"][:chain["cursor"]]
 
-    with _Image.open(base) as src:
+    with _Image.open(_lp(base)) as src:
         img = src.copy()
     for entry in ops:
         img = _apply_op(img, entry.get("op"), entry.get("params", {}))
@@ -2035,18 +2240,20 @@ def _render_chain(full_path: Path, chain: dict) -> None:
 
     tmp = full_path.parent / f".render_{full_path.name}"
     try:
-        img.save(tmp, format=fmt, **save_kwargs)
-        tmp.replace(full_path)
+        img.save(_lp(tmp), format=fmt, **save_kwargs)
+        # Windows: hedef dosya bir başka programda (ya da kendi küçük resim
+        # üreticimizde) açıksa taşıma düşer — `_tasi` kısa süre yeniden dener.
+        _tasi(tmp, full_path)
     finally:
-        if tmp.exists():
+        if os.path.exists(_lp(tmp)):
             try:
-                tmp.unlink()
+                os.unlink(_lp(tmp))
             except OSError:
                 pass
 
     # Yazdığımız görüntünün parmak izi — dosya dışarıdan değişirse zincir
     # geçersiz sayılır (bkz. _is_stale)
-    st = full_path.stat()
+    st = os.stat(_lp(full_path))
     chain["render"] = {"sha": _sha256(full_path), "size": st.st_size,
                        "mtime": int(st.st_mtime)}
     cache_manager.invalidate_thumbnail(str(full_path))
@@ -2089,7 +2296,7 @@ def _chain_state(full_path: Path, chain: dict) -> dict:
         "cursor": chain["cursor"],
         "can_undo": chain["cursor"] > 0,
         "can_redo": chain["cursor"] < len(chain["ops"]),
-        "has_backup": _original_path(full_path).exists(),
+        "has_backup": os.path.exists(_lp(_original_path(full_path))),
     }
 
 
@@ -2164,14 +2371,18 @@ async def revert_edit(path: str):
         raise HTTPException(404, "Resim bulunamadı")
 
     backup_path = _original_path(full_path)
-    if not backup_path.exists():
+    if not os.path.exists(_lp(backup_path)):
         return {"ok": False, "reverted": False, "reason": "Yedek bulunamadı"}
 
     # Aynı kilit: devam eden bir düzenleme render'ının ortasına girip dosyayı
     # geri yüklemek, zinciri dosyayla tutarsız bırakırdı.
     async with _chain_lock(full_path):
         import shutil as _shutil
-        _shutil.copy2(backup_path, full_path)
+        try:
+            _shutil.copy2(_lp(backup_path), _lp(full_path))
+        except OSError as e:
+            logger.error("revert copy failed: %s", e)
+            raise _kilit_hatasi(e, "geri alma")
         _discard_chain(full_path)  # zincir + legacy temel artık geçersiz
         cache_manager.invalidate_thumbnail(str(full_path))
     return {"ok": True, "reverted": True}
@@ -2183,7 +2394,7 @@ async def has_backup(path: str):
     if not full_path:
         return {"has_backup": False}
     backup_path = full_path.parent / '.gallery_originals' / full_path.name
-    return {"has_backup": backup_path.exists()}
+    return {"has_backup": os.path.exists(_lp(backup_path))}
 
 
 # ── Faz 9 — Video Editing (trim) ──────────────────────────────────────────────
@@ -2207,6 +2418,16 @@ async def trim_video(path: str, body: dict):
     if full_path.suffix.lower() not in _VIDEO_EDIT_EXT:
         raise HTTPException(400, "Bu dosya türü kesilemez")
 
+    # ffmpeg Windows'ta pratikte HİÇ kurulu değildir. Bu kontrol olmadan
+    # `subprocess.run` FileNotFoundError fırlatıyor, kullanıcı "500 Internal
+    # Server Error" görüyor ve neyin eksik olduğunu asla öğrenemiyordu.
+    # (Poster karesi yolu zaten yer tutucuya düşüyordu — kesme yolu düşmüyordu.)
+    if not _shutil.which("ffmpeg"):
+        raise HTTPException(501, "Video kesme için ffmpeg gerekli ama kurulu değil. "
+                                 "Windows: winget install Gyan.FFmpeg · "
+                                 "Linux: sudo pacman -S ffmpeg / sudo apt install ffmpeg "
+                                 "(kurduktan sonra uygulamayı yeniden başlatın).")
+
     try:
         start_ms = int(body.get("start_ms", 0))
         end_ms = int(body.get("end_ms", 0))
@@ -2219,8 +2440,8 @@ async def trim_video(path: str, body: dict):
     backup_dir = full_path.parent / '.gallery_originals'
     backup_path = backup_dir / full_path.name
     if not backup_path.exists():
-        backup_dir.mkdir(exist_ok=True)
-        _shutil.copy2(full_path, backup_path)
+        _mkdir(backup_dir)
+        _shutil.copy2(_lp(full_path), _lp(backup_path))
 
     # ffmpeg kaynağı = yedek (üst üste kesimlerde bozulmayı önler)
     source = backup_path
@@ -2234,7 +2455,7 @@ async def trim_video(path: str, body: dict):
              "-ss", f"{start_s:.3f}", "-i", str(source),
              "-t", f"{dur_s:.3f}", "-c", "copy", "-avoid_negative_ts", "make_zero",
              str(tmp_out)],
-            capture_output=True, timeout=120,
+            capture_output=True, timeout=120, creationflags=_NO_WINDOW,
         )
         if proc.returncode != 0 or not tmp_out.exists():
             # Stream-copy başarısızsa (bazı formatlar) yeniden kodlamayı dene
@@ -2243,13 +2464,19 @@ async def trim_video(path: str, body: dict):
                  "-ss", f"{start_s:.3f}", "-i", str(source),
                  "-t", f"{dur_s:.3f}", "-c:v", "libx264", "-c:a", "aac",
                  str(tmp_out)],
-                capture_output=True, timeout=300,
+                capture_output=True, timeout=300, creationflags=_NO_WINDOW,
             )
         if proc.returncode != 0 or not tmp_out.exists():
             err = (proc.stderr or b"").decode("utf-8", "replace")[:300]
             raise HTTPException(500, f"Video kesme hatası: {err}")
 
-        _shutil.move(str(tmp_out), str(full_path))
+        try:
+            _tasi(tmp_out, full_path)
+        except OSError as e:
+            # Windows: video lightbox'ta oynuyorsa hedef dosya kilitlidir. Kesme
+            # başarılıydı ama sonuç yerine konamadı — orijinal bozulmadan durur.
+            logger.error("trim move failed: %s", e)
+            raise _kilit_hatasi(e, "kaydetme")
         cache_manager.invalidate_thumbnail(str(full_path))
         return {"ok": True, "has_backup": True}
     except subprocess.TimeoutExpired:
