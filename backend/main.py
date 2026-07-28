@@ -61,6 +61,31 @@ else:
         # Gerçekten ağa açıldığında __main__ bloğu yazdırır.
         _origins.append(f"http://{_local_ip}:{_PORT}")
 
+def _akisi_utf8_yap(akis) -> None:
+    """Bir çıktı akışını UTF-8'e çevir (çevrilemiyorsa sessizce geç).
+
+    Windows'ta `sys.stdout`'un kodlaması konsolun kod sayfasıdır (en-US'ta
+    cp1252, TR'de cp857) — ve `print("⚠️ Sunucu AĞA AÇIK")` orada
+    `UnicodeEncodeError` FIRLATIR. Bu bir günlük satırı değil, çıplak `print`
+    olduğu için istisna yakalanmaz: kullanıcı telefon erişimini açtığı anda
+    sunucu çökerdi. Aynı tuzak `ğ`/`ş` içeren her mesaj için geçerli, çünkü bu
+    harfler cp1252'de YOKTUR.
+
+    `errors="replace"`: kodlanamayan karakter yüzünden bir daha asla çökme —
+    en kötü ihtimalle soru işareti görünür.
+    """
+    try:
+        kodlama = (getattr(akis, "encoding", "") or "").lower().replace("-", "")
+        if kodlama != "utf8":
+            akis.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
+
+
+for _akis in (sys.stdout, sys.stderr):
+    _akisi_utf8_yap(_akis)
+
+
 def _user_data_dir() -> Path:
     """Yazılabilir kullanıcı veri dizini (masaüstü paketi için).
 

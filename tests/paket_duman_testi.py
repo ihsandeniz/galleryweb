@@ -31,6 +31,14 @@ PORT = int(os.getenv("DUMAN_PORT", "5098"))
 KOK = f"http://127.0.0.1:{PORT}"
 
 
+for _akis in (sys.stdout, sys.stderr):
+    # Windows konsolu (cp1252/cp857) '▸' veya 'ğ' göremez ve print ÇÖKER.
+    try:
+        _akis.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
+
+
 def yaz(m):
     print(m, flush=True)
 

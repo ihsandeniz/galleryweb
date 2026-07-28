@@ -170,7 +170,27 @@ def test_ffmpeg_yoksa_trim_anlasilir_hata_verir(istemci, galeri, monkeypatch):
     assert "ffmpeg" in r.json()["detail"]
 
 
-# ── 6) MIME türleri (Windows kayıt defterine bağımlılık) ─────────────────────
+# ── 6) Konsol kodlaması ───────────────────────────────────────────────────────
+
+def test_turkce_cikti_cp1252_akista_cokmez():
+    """Windows konsolu cp1252'dir ve 'ğ'/'ş'/emoji orada YOKTUR.
+
+    Kırıldığında belirtisi: kullanıcı telefon erişimini açar, sunucu
+    `print("⚠️ Sunucu AĞA AÇIK…")` satırında UnicodeEncodeError ile ÇÖKER.
+    CI'ın ikinci turunda gerçekten yakalandı.
+    """
+    import io
+
+    ham = io.BytesIO()
+    akis = io.TextIOWrapper(ham, encoding="cp1252", errors="strict")
+    main._akisi_utf8_yap(akis)
+
+    akis.write("⚠️ Sunucu AĞA AÇIK — İstanbul Boğazı 📱")   # eskiden burada çökerdi
+    akis.flush()
+    assert "AĞA AÇIK".encode("utf-8") in ham.getvalue()
+
+
+# ── 7) MIME türleri (Windows kayıt defterine bağımlılık) ─────────────────────
 
 def test_medya_turu_uzantidan_belirleniyor():
     from pathlib import Path
