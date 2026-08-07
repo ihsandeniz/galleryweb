@@ -1,7 +1,5 @@
 import logging
 import time as _time
-import secrets
-import hmac
 import hashlib
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
@@ -304,19 +302,19 @@ async def add_security_headers(request: Request, call_next):
     # fonts.googleapis / fonts.gstatic / unpkg izinleri KALDIRILDI. Böylece bir
     # regresyon CDN linkini geri getirse bile tarayıcı isteği bloklar.
     #
-    # Kalan iki dış izin yalnızca BULUT modu içindir ve yerel modda tetiklenmez:
-    #   cdn.jsdelivr             → Supabase JS (realtime.js lazy yükler)
-    #   *.supabase.co            → bulut API + realtime websocket
+    # 2026-08-07: Bulut (SaaS) modu kaldırıldı → onun için açık tutulan iki dış izin
+    # de KALDIRILDI: `cdn.jsdelivr` (Supabase JS'i lazy yüklerdi) ve `*.supabase.co`.
+    # Artık script-src ve connect-src tamamen 'self' — dış kaynak sıfır.
     # img-src'deki OpenStreetMap ise harita altlığı içindir ve kullanıcı açıkça
     # onay verene kadar istenmez (frontend: _mapTilePref). CSP burada yalnızca
     # tavan çizer — asıl kapı istemcide.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
         "media-src 'self' blob: data:; "
-        "connect-src 'self' ws: wss: https://*.supabase.co; "
+        "connect-src 'self' ws: wss:; "
         "font-src 'self' data:"
     )
     return response
@@ -353,11 +351,6 @@ async def root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
-@app.get("/login")
-async def login_page():
-    return FileResponse(str(FRONTEND_DIR / "login.html"))
-
-
 @app.get("/share")
 async def share_page():
     return FileResponse(str(FRONTEND_DIR / "share.html"))
@@ -369,127 +362,13 @@ async def favicon():
 
 
 # ──────────────────────────────────────────────
-# Demo Auth — hardcoded kullanıcı (Supabase olmadan)
+# NOT: Buradaki 'Demo Auth' (DEMO_USERS sabit parolaları + /auth/* uçları)
+# 2026-08-07'de kaldırıldı. Yayınlanmamış SaaS katmanının kalıntısıydı ve
+# hiçbir ucu korumuyordu (tek bir Depends() bağlı değildi) — açık kaynak
+# depoda sabit parola tutmanın hiçbir karşılığı yoktu.
+# GalleryWeb tek kullanıcılıdır ve bilinçli olarak kimlik doğrulaması yoktur;
+# ağa açmak isteyen GALLERYWEB_LAN=1 kullanır (README § Security & privacy).
 # ──────────────────────────────────────────────
-DEMO_USERS = {
-    "demo@gallery.local": "demo1234",
-    "admin@gallery.local": "admin1234",
-}
-_demo_tokens: dict = {}         # access_token  → email
-_demo_refresh_tokens: dict = {}  # refresh_token → {email, signature, issued_at}
-
-# Token signing configuration
-TOKEN_SECRET = os.getenv("TOKEN_SECRET", secrets.token_hex(32))
-
-def _sign_token(token: str) -> str:
-    """Generate HMAC-SHA256 signature for a token."""
-    return hmac.new(TOKEN_SECRET.encode(), token.encode(), hashlib.sha256).hexdigest()
-
-def _verify_token_signature(token: str, sig: str) -> bool:
-    """Verify token signature using constant-time comparison."""
-    expected = _sign_token(token)
-    return hmac.compare_digest(expected, sig)
-
-
-class AuthLoginBody(BaseModel):
-    email: str
-    password: str
-
-
-class AuthSignupBody(BaseModel):
-    email: str
-    password: str
-    full_name: str | None = None
-
-
-def _issue_tokens(email: str) -> tuple[str, str]:
-    """Return (access_token, refresh_token) — with HMAC signature and expiry."""
-    access = secrets.token_hex(32)
-    refresh = secrets.token_hex(32)
-
-    _demo_tokens[access] = email
-
-    # Store refresh token with signature and issued_at timestamp
-    # Refresh tokens expire in 7 days (604800 seconds)
-    _demo_refresh_tokens[refresh] = {
-        "email": email,
-        "signature": _sign_token(refresh),
-        "issued_at": time.time(),
-        "expires_at": time.time() + 604800  # 7 days
-    }
-    return access, refresh
-
-
-@app.post("/auth/login")
-@limiter.limit("5/minute")
-async def auth_login(request: Request, body: AuthLoginBody):
-    expected = DEMO_USERS.get(body.email)
-    if not expected or expected != body.password:
-        raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı")
-    access, refresh = _issue_tokens(body.email)
-    return {
-        "access_token": access,
-        "refresh_token": refresh,
-        "expires_in": 86400,
-        "user": {"id": "demo-001", "email": body.email, "full_name": "Demo Kullanıcı"},
-    }
-
-
-@app.post("/auth/signup")
-@limiter.limit("5/minute")
-async def auth_signup(request: Request, body: AuthSignupBody):
-    access, refresh = _issue_tokens(body.email)
-    return {
-        "access_token": access,
-        "refresh_token": refresh,
-        "expires_in": 86400,
-        "user": {"id": "demo-new", "email": body.email, "full_name": body.full_name or "Yeni Kullanıcı"},
-    }
-
-
-@app.post("/auth/refresh")
-async def auth_refresh(request: Request):
-    data = await request.json()
-    rt = data.get("refresh_token", "")
-    rt_data = _demo_refresh_tokens.pop(rt, None)
-
-    if not rt_data:
-        raise HTTPException(status_code=401, detail="Geçersiz refresh token")
-
-    # Verify token signature (constant-time comparison)
-    if not _verify_token_signature(rt, rt_data.get("signature", "")):
-        raise HTTPException(status_code=401, detail="Token imzası doğrulanamadı")
-
-    # Check if refresh token has expired
-    if time.time() > rt_data.get("expires_at", 0):
-        raise HTTPException(status_code=401, detail="Refresh token süresi dolmuş")
-
-    email = rt_data.get("email")
-    if not email:
-        raise HTTPException(status_code=401, detail="Geçersiz token verisi")
-
-    # Issue new tokens
-    access, new_refresh = _issue_tokens(email)
-    return {
-        "access_token": access,
-        "refresh_token": new_refresh,
-        "expires_in": 86400,
-    }
-
-
-@app.post("/auth/logout")
-async def auth_logout(request: Request):
-    auth = request.headers.get("Authorization", "")
-    token = auth.replace("Bearer ", "")
-    _demo_tokens.pop(token, None)
-    return {"ok": True}
-
-
-@app.get("/auth/forgot-password")
-@app.post("/auth/forgot-password")
-async def auth_forgot(_: Request):
-    return {"ok": True, "message": "Demo modda şifre sıfırlama aktif değil"}
-
 
 # ──────────────────────────────────────────────
 # Directory Management

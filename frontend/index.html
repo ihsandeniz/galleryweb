@@ -34,19 +34,9 @@
             <button id="pwaInstallBtn" class="topbar-btn hidden" title="Uygulamayı Yükle">⬇</button>
             <button id="themeToggleBtn" class="topbar-btn" title="Tema">◐</button>
             <button id="helpBtn" class="topbar-btn" title="Kısayollar (?)">?</button>
-            <button id="modeSwitchBtn" class="topbar-btn" title="Mod Değiştir">📂</button>
-            <!-- Auth: user avatar + dropdown -->
-            <div id="userMenuWrap" class="user-menu-wrap hidden">
-                <button id="userMenuBtn" class="user-avatar-btn" title="Hesap">
-                    <span id="userInitials">?</span>
-                </button>
-                <div id="userDropdown" class="user-dropdown hidden">
-                    <div id="userEmailLabel" class="ud-email"></div>
-                    <div id="userTierLabel" class="ud-tier"></div>
-                    <div class="ud-divider"></div>
-                    <button class="ud-logout">Çıkış Yap</button>
-                </div>
-            </div>
+            <!-- 2026-08-07: mod değiştirme düğmesi (📂/☁) ve hesap menüsü kaldırıldı.
+                 İkisi de yayınlanmamış bulut (SaaS) katmanına aitti; düğmeye basmak
+                 kullanıcıyı arkasında sunucu olmayan bir moda düşürüyordu. -->
         </div>
     </header>
 
@@ -57,21 +47,9 @@
     <div class="app-layout">
         <!-- Sidebar Navigation -->
         <nav class="sidebar" id="sidebar">
-            <!-- BULUT BÖLÜMÜ (bulut modunda görünür) -->
-            <div id="cloudSection">
-                <div class="sidebar-label">BULUT GALERİ</div>
-                <select id="cloudGallerySelect" class="sort-select" style="margin:0 8px 6px;width:calc(100% - 16px)">
-                    <option value="">Galeri seçin...</option>
-                </select>
-                <button id="cloudUploadBtn" class="sidebar-item sidebar-primary">
-                    <span class="si-icon">⬆</span>
-                    <span class="si-label">Fotoğraf Yükle</span>
-                </button>
-                <input type="file" id="cloudFileInput" accept="image/*,video/mp4,video/webm,video/quicktime" multiple style="display:none">
-                <div class="sidebar-divider"></div>
-            </div>
+            <!-- BULUT GALERİ bölümü 2026-08-07'de kaldırıldı (yayınlanmamış SaaS katmanı). -->
 
-            <!-- KLASÖRLER BÖLÜMÜ (yerel modunda görünür) -->
+            <!-- KLASÖRLER -->
             <div id="yerelSection">
             <div class="sidebar-label">KLASÖRLER</div>
 
@@ -889,59 +867,14 @@
     });
     </script>
 
-    <!-- Leaflet: self-host. Supabase JS: yerel modda HİÇ yüklenmez — bulut modunda
-         realtime.js tarafından talep anında (lazy) indirilir. Bkz. realtime.js _loadSupabaseJs(). -->
+    <!-- Leaflet: self-host. Dış kaynak yok — bulut (SaaS) modu 2026-08-07'de
+         kaldırıldı, Supabase JS'i lazy yükleyen realtime.js ile birlikte. -->
     <script src="/static/vendor/leaflet/leaflet.js"></script>
-    <script src="/static/js/auth.js?v=1"></script>
-    <script src="/static/js/saas-api.js?v=1"></script>
-    <script src="/static/js/realtime.js?v=3"></script>
     <script>
-    // Auth guard — runs before gallery.js initialises
-    (async function () {
-        // Yerel mod (self-host, varsayılan): login YOK — auth guard tamamen atlanır.
-        // Sadece bulut modu (hosted SaaS) kimlik doğrulaması gerektirir.
-        const mode = localStorage.getItem('galleryMode') || 'yerel';
-        if (mode !== 'bulut') return;
+    // 2026-08-07: auth guard KALDIRILDI. Yalnız bulut (SaaS) modunda çalışıyordu,
+    // o katman hiç yayınlanmadı ve şimdi tamamen söküldü. GalleryWeb tek modda
+    // çalışır: yerel, login'siz. auth.js / saas-api.js / realtime.js silindi.
 
-        const ok = await window.GW.requireAuth();
-        if (!ok) return; // redirected to /login
-
-        const user = window.GW.getUser();
-        if (user) {
-            const wrap  = document.getElementById('userMenuWrap');
-            const init  = document.getElementById('userInitials');
-            const email = document.getElementById('userEmailLabel');
-            const tier  = document.getElementById('userTierLabel');
-            if (wrap)  wrap.classList.remove('hidden');
-            if (init)  init.textContent  = (user.full_name || user.email || '?')[0].toUpperCase();
-            if (email) email.textContent  = user.email || '';
-            if (tier)  tier.textContent   = (user.tier || 'free').toUpperCase();
-        }
-
-        // Offline queue badge — show pending ops count
-        if (window.GW_RT && window.GW_RT.queueLength() > 0) {
-            window.GW_RT.flushQueue();
-        }
-
-        // Token refresh → update Realtime auth
-        window.addEventListener('gw:token-refreshed', (e) => {
-            if (window.GW_RT) window.GW_RT.updateToken(e.detail.token);
-        });
-    }());
-
-    function toggleUserMenu() {
-        document.getElementById('userDropdown').classList.toggle('hidden');
-    }
-    // UI-F006: inline onclick yerine addEventListener (CSP unsafe-inline gerektirmez + refactor-güvenli)
-    document.getElementById('userMenuBtn')?.addEventListener('click', toggleUserMenu);
-    document.querySelector('.ud-logout')?.addEventListener('click', () => window.GW.logout());
-    // Close dropdown on outside click
-    document.addEventListener('click', function (e) {
-        const wrap = document.getElementById('userMenuWrap');
-        if (wrap && !wrap.contains(e.target)) {
-            document.getElementById('userDropdown').classList.add('hidden');
-        }
-    });
     </script>
     <script src="/static/js/gallery.js?v=29"></script>
     <script src="/static/js/keybinds.js?v=21"></script>

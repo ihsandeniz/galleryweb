@@ -38,3 +38,6 @@ docker-compose.kisisel.yml
 
 # Araç önbelleği (lean-ctx) — sürümlenmemeli
 .lean-ctx/
+
+# Supabase CLI çalışma dosyaları — .temp/ proje ref + DB host sızdırır (2026-08-07)
+supabase/

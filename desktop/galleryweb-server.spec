@@ -15,8 +15,8 @@ dizine açan tek-dosya exe'ler virüs tarayıcılarında yanlış pozitife yatk�
 Klasör düzeninde açma adımı hiç yoktur — dosyalar diskte zaten durur.
 Linux'ta AppImage kendisi bir kap olduğu için tek-dosya kalıyor.
 
-Sadece YEREL mod paketlenir: `backend/main.py` bağımsızdır — Supabase/pgvector/CLIP
-import etmez. Bulut modu (main_saas.py) kasıtlı olarak dışarıda; onu da almak
+`backend/main.py` bağımsızdır — dış servis/DB import etmez. (Bir zamanlar var olan
+bulut modu `main_saas.py` 2026-08-07'de depodan kaldırıldı.) Onu da almak
 paket boyutunu ~2.5GB'a çıkarırdı.
 """
 import sys
