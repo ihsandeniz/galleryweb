@@ -47,6 +47,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          # 2026-08-07: `cache: pip` varsayılan olarak **/requirements.txt arar.
+          # SaaS katmanıyla birlikte o dosya silindiği için hiçbir şey eşleşmedi
+          # ve setup-python adımı hata verdi (yerelde görünmeyen, CI'ya özel kusur).
+          cache-dependency-path: backend/requirements-selfhost.txt
 
       - name: Bağımlılıklar
         run: |
