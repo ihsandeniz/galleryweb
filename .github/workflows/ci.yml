@@ -133,9 +133,17 @@ jobs:
         with:
           name: galleryweb-windows
           retention-days: 30
-          path: |
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
-            desktop/src-tauri/target/release/GalleryWeb.exe
+          # 2026-08-07: burada ikinci bir yol daha vardı —
+          # `desktop/src-tauri/target/release/GalleryWeb.exe`. **Hiçbir zaman
+          # eşleşmedi:** Tauri ikiliyi `productName` ile değil Cargo paket adıyla
+          # bırakıyor → `galleryweb-desktop.exe`. Varsayılan `if-no-files-found: warn`
+          # olduğu için koşu yıllarca yeşil kaldı, artifact eksik üretildi.
+          # Yol düzeltilmedi, KALDIRILDI: tek başına exe zaten kullanılabilir bir
+          # çıktı değil — sunucuyu `resource_dir()` altında arar, kurulum paketi
+          # dışında bulamaz (src-tauri/src/main.rs `resolve_server_binary`).
+          # Teslim edilen şey kurulum paketidir.
+          if-no-files-found: error   # sessiz eksik yükleme bir daha olmasın
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
 
   frontend-lint:
     name: Frontend Lint
