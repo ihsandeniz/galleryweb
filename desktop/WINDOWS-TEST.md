@@ -19,15 +19,24 @@ paketinin içeriğini doğruluyor. Ama CI'nın **yapamadığı** altı şey var 
 
 ## Paketi indir
 
-> 🔴 **2026-08-07 — taslak release'deki paket BAYAT, oradan indirme.**
-> `v1.1.0` taslağındaki `GalleryWeb_1.1.0_x64-setup.exe` **2026-07-28'de** yüklendi (226 MB).
-> O tarihten sonra bulut/SaaS katmanı ve sabit parolalı demo giriş depodan kaldırıldı
-> (`3814181`, `024f94d`) — yani taslaktaki paket **artık var olmayan kodu** içeriyor,
-> ölü ☁ düğmesi dahil. Onunla test edersen yayınlanmayacak bir sürümü sınamış olursun.
-> Taslak varlıkları tazelenene kadar **tek doğru kaynak CI artifact'ıdır.**
+> ✅ **2026-08-07 17:04 — taslak paketler TAZELENDİ.** Bir süre bayattılar (07-28
+> sürümü, bugün silinen SaaS katmanını içeriyordu); üçü de değiştirildi.
+> Windows paketi `19acaf09` koşusunun CI çıktısıdır, Linux paketleri aynı ağaçtan
+> yerelde derlendi. Doğrulandı: kurulum paketi açıldı, içindeki
+> `_internal/frontend/js/gallery.js` **`MODE='yerel'`** taşıyor, bulut fonksiyonu
+> 0, `auth.js`/`saas-api.js`/`realtime.js`/`login.html` pakette **yok**.
+> **Ders kayda geçti** → `WIKI/ledger.md` §
+> `release/taslak-varlik-koddan-sonra-tazelenmez-bayat-paket-test-edilir`
 
-**Doğru yol —** https://github.com/ihsandeniz/galleryweb/actions → yeşil **CI** koşusu
-(`19acaf09` veya daha yenisi) → **Artifacts** → `galleryweb-windows` (232 MB, 30 gün durur).
+**En kolay yol —** https://github.com/ihsandeniz/galleryweb/releases → **`v1.1.0` (Draft)**
+→ `GalleryWeb_1.1.0_x64-setup.exe` (**232 MB**, 07-08-2026 17:04'te yüklendi).
+*Taslağı yalnız sen görürsün.*
+
+Alternatif (aynı dosya): Actions → yeşil **CI** koşusu → **Artifacts** →
+`galleryweb-windows` (30 gün durur).
+
+> 🔎 **İndirmeden önce 5 saniyelik kontrol:** dosya boyutu **232 MB** olmalı.
+> 226 MB görüyorsan bayat sürüme bakıyorsundur — indirme, haber ver.
 
 > ⚠️ **VM'in İÇİNDEN, tarayıcıyla indir.** Paylaşılan klasörle kopyalarsan dosyaya
 > *Mark of the Web* basılmaz, SmartScreen hiç çıkmaz ve aşağıdaki 1. madde **sahte geçer**.
