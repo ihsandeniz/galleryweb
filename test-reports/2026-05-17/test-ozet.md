@@ -6,6 +6,15 @@ reports_found: 5/5
 status: completed
 ---
 
+> 📅 **TARİHSEL ANLIK GÖRÜNTÜ — 2026-05-17. Güncel durum DEĞİLDİR.**
+> Bu rapor o gündeki kod tabanını anlatır. Aradan geçen sürede bulguların büyük
+> kısmı düzeltildi ve **denetlenen dosyaların bir bölümü artık depoda yok**
+> (`main_saas.py`, `backend/app/`, `login.html`, `saas-api.js`, `realtime.js`,
+> `db/*.sql`, `backend/requirements.txt` — 2026-08-07'de kaldırıldı). Buradaki
+> hiçbir bulgu, doğrulanmadan bugünün açığı olarak okunmamalıdır.
+> Güncel güvenlik durumu → [`SECURITY_AUDIT.md`](../../SECURITY_AUDIT.md) ·
+> canlı denetim → her push'ta CI (`pip-audit -r backend/requirements-selfhost.txt`).
+
 # Özet Test Raporu — Galleryweb — 2026-05-17
 
 ## Genel Durum

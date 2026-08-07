@@ -42,7 +42,15 @@ There is **one mode**: local. No external service is required.
 - **Editing studio** — rotate, flip (H/V), aspect-locked crop, live-preview adjustments (brightness, contrast, saturation, sharpness, temperature, gamma), and one-click filter presets (B&W, sepia, vintage, cool, warm, vivid).
 - **Video trimming** — cut start/end with a two-handle timeline (ffmpeg). Non-destructive: originals are backed up and revertible.
 - **Fast browsing** — thumbnails (SQLite cache), EXIF display, duplicate finder, favorites, tags, albums, ratings, map view (GPS EXIF).
-- **PWA** — installable, works offline, optional phone access on your local network (`GALLERYWEB_LAN=1`).
+- **PWA** — installable, works offline², optional phone access on your local network (`GALLERYWEB_LAN=1`).
+
+> ² Measured, not assumed (2026-08-07): with the network fully cut, a reload still
+> renders the full UI from the service-worker cache — 43 KB of DOM, 506 CSS rules,
+> `gallery.js` live, zero console errors. Scope, from `frontend/sw.js`: the app shell
+> (HTML/CSS/JS/fonts/Leaflet) and **previously viewed** thumbnails are served from
+> cache; live API calls fall back to cache and otherwise return `503 offline`. So an
+> offline reload gives you the interface and what you already looked at — not a fresh
+> read of your folders.
 
 ---
 

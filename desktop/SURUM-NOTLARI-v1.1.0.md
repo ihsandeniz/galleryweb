@@ -41,8 +41,14 @@ istisna fırlatmıyordu — kullanıcı sadece işin **olmadığını** görüyo
 
 ## 📦 Paketleme değişiklikleri
 
-- **Windows paketi klasör düzeninde (onedir).** Tek dosya paket her açılışta ~55 MB'ı
-  `%TEMP%`'e açıyordu — Defender her seferinde baştan tarıyor, açılış uzuyordu.
+- **Windows paketi klasör düzeninde (onedir).** Tek dosya paket **her açılışta**
+  içeriğini geçici klasöre açıyordu; uygulama kapanınca siliniyor, sonraki açılışta
+  yeniden çıkarılıyordu. ~~~55 MB~~ **Ölçüldü (2026-08-07, Linux onefile yapısı):
+  55 MB'lık paket geçici dizine `141 MB / 207 dosya` çıkarıyor** — 55 MB *sıkıştırılmış*
+  boyuttu, diske yazılan bu. Windows'ta onedir düzeni bu adımı tamamen kaldırır
+  (`galleryweb-server.spec`: `exclude_binaries=WINDOWS` + `COLLECT`).
+  ⚠️ Bu maddenin *"Defender her seferinde baştan tarıyor"* kısmı **ölçülmedi** —
+  gerçek Windows Defender gerektirir, W3 turunda görülecek.
 - **WebView2 çevrimdışı kurucu gömüldü.** Kurulum artık internet istemiyor. (Varsayılan
   davranış indirmekti; internetsiz makinede uygulama hiç açılmıyordu.)
 - **Paket artık CI'da üretiliyor.** Her push'ta testler gerçek Windows'ta koşuyor, paket
