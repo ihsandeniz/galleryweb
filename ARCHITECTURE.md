@@ -1,5 +1,18 @@
 # GalleryWeb SaaS — Architecture Decision Log
 
+> ## ⚠️ TARİHSEL BELGE — UYGULANMADI
+>
+> Bu dosya 2026'da planlanan **çok kiracılı SaaS sürümünün** mimari karar günlüğüdür.
+> **O sürüm hiç yayınlanmadı.** Kod iskeleti (`backend/app/`, `main_saas.py`, Supabase
+> katmanı, R2, CLIP arama) 2026-08-07'de depodan tamamen kaldırıldı.
+>
+> GalleryWeb **tek modda** çalışır: yerel, login'siz, dış servis yok, veritabanı kurulumu yok.
+> Güncel mimari için → [README.md](README.md).
+>
+> Belge, alınan kararların gerekçesi ileride değerli olabileceği için saklanıyor —
+> **ama burada anlatılan hiçbir bileşen çalışmıyor.**
+
+
 **Proje:** GalleryWeb cross-platform SaaS  
 **Başlangıç:** 2026-06-17  
 **Plan Referansı:** `WIKI/sources/projects/galleryweb-saas-plan.md`

@@ -23,8 +23,11 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
 
+      # 2026-08-07: hedef `requirements.txt` idi — yani KULLANILMAYAN bulut/SaaS
+      # bağımlılıkları denetleniyor, yayınlanan ürününkiler denetlenmiyordu.
+      # SaaS katmanı kaldırıldı; denetim artık gerçekten paketlenen dosyada.
       - name: Run pip-audit
-        run: pip-audit -r backend/requirements.txt
+        run: pip-audit -r backend/requirements-selfhost.txt
 
   yerel-test:
     name: Yerel mod testleri (${{ matrix.os }})

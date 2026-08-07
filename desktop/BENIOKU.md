@@ -77,7 +77,7 @@ Ayrıca kurulum paketi **imzasız** olacağı için SmartScreen uyarısı çıka
 ## Tasarım kararları
 
 **Neden gömülü sunucu, neden tam yeniden yazım değil?**
-`backend/main.py` zaten tamamen bağımsız (Supabase/DB import etmez). Masaüstü sürümü
+`backend/main.py` zaten tamamen bağımsız (dış servis/DB import etmez). Masaüstü sürümü
 onu olduğu gibi kullanır — web ve masaüstü **tek kod tabanı**, davranış farkı yok.
 Aynı test paketi hem kaynaktan hem paketlenmiş binary'ye karşı koşuyor.
 
@@ -106,8 +106,9 @@ macOS `~/Library/Application Support`). `GALLERYWEB_DATA_DIR` ile değiştirileb
 
 **Paket neden 55 MB?**
 Yerel mod yalnızca hafif bağımlılıkları (`requirements-selfhost.txt`) kullanır.
-Bulut modunun ağır paketleri (torch, transformers, supabase, sqlalchemy…) derleme
-sırasında bilinçle dışlanır; onlarla paket ~2.5 GB olurdu.
+(2026-08-07'ye kadar depoda duran bulut/SaaS katmanının ağır paketleri —
+torch, transformers, supabase, sqlalchemy — zaten dışlanıyordu; o katman
+artık tamamen kaldırıldı, paket bu yüzden küçük.)
 
 ## Doğrulama
 

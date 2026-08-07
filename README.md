@@ -1,6 +1,6 @@
 # GalleryWeb
 
-A self-hostable photo & video gallery with a built-in **editing studio** — crop, rotate, flip, color/light adjustments, filter presets, and video trimming. Runs entirely on your own machine with **no login and no cloud account required**, or as a multi-tenant hosted service.
+A self-hostable photo & video gallery with a built-in **editing studio** — crop, rotate, flip, color/light adjustments, filter presets, and video trimming. Runs entirely on your own machine with **no login and no cloud account required**.
 
 > Fotoğraf ve video galeriniz + düzenleme stüdyosu. Kendi bilgisayarınızda, **giriş yapmadan** çalışır.
 
@@ -8,17 +8,23 @@ A self-hostable photo & video gallery with a built-in **editing studio** — cro
 
 ---
 
-## Two ways to run it
+## How it runs
 
-| | **Self-host (local mode)** | **Hosted (cloud mode)** |
-|---|---|---|
-| **Who** | Anyone, on their own PC | Users who don't want to self-host |
-| **Login** | ❌ None — open the app and go | ✅ Accounts + multi-tenant |
-| **Data** | Stays on your disk | Server + object storage |
-| **Setup** | Double-click `run.sh` / `run.bat` (or `docker compose up`) | Supabase + PostgreSQL (see [SETUP.md](SETUP.md)) |
-| **Cost** | Free forever | Your hosting / subscription |
+| | **GalleryWeb** |
+|---|---|
+| **Who** | Anyone, on their own PC |
+| **Login** | ❌ None — open the app and go |
+| **Data** | Stays on your disk. No account, no telemetry, no outbound calls |
+| **Setup** | Double-click `run.sh` / `run.bat` (or `docker compose up`) |
+| **Database** | None to install — the thumbnail cache uses SQLite (stdlib) |
+| **Cost** | Free forever |
 
-The **same codebase** powers both. Local mode is the default and needs zero external services.
+There is **one mode**: local. No external service is required or contacted.
+
+> **Note (2026-08-07):** earlier versions of this README also advertised a multi-tenant
+> "hosted/cloud mode" (Supabase + PostgreSQL). That layer never shipped — it was an
+> unfinished scaffold, and the setup guide pointed at it. Both have been removed so the
+> documentation matches what the software actually does.
 
 ---
 
@@ -28,8 +34,6 @@ The **same codebase** powers both. Local mode is the default and needs zero exte
 - **Video trimming** — cut start/end with a two-handle timeline (ffmpeg). Non-destructive: originals are backed up and revertible.
 - **Fast browsing** — thumbnails (SQLite cache), EXIF display, duplicate finder, favorites, tags, albums, ratings, map view (GPS EXIF).
 - **PWA** — installable, works offline, optional phone access on your local network (`GALLERYWEB_LAN=1`).
-- **Sharing & proofing** *(hosted mode)* — client galleries with comments, votes, selections, and timestamped video annotations.
-- **AI semantic search** *(hosted mode)* — CLIP-based "find photos by describing them".
 
 ---
 
@@ -84,7 +88,7 @@ yani güncelleme için hiçbir şeyi silmenize gerek yok. (git ile klonladıysan
 ```bash
 git clone https://github.com/ihsandeniz/galleryweb.git
 cd galleryweb/backend
-pip install -r requirements-selfhost.txt   # lightweight — no CLIP/Supabase
+pip install -r requirements-selfhost.txt   # lightweight — no heavy ML deps
 python main.py                              # → http://localhost:5000
 ```
 
@@ -121,19 +125,11 @@ Inside the app, open the `/photos` folder. `ffmpeg` is already included in the i
 
 ---
 
-## Hosted / cloud mode (advanced)
-
-Cloud mode adds accounts, multi-tenancy, object storage (Cloudflare R2), realtime sync, client proofing, and CLIP search. It requires Supabase + PostgreSQL (with `pgvector`). See **[SETUP.md](SETUP.md)** and **[ARCHITECTURE.md](ARCHITECTURE.md)** for the full stack, and `requirements.txt` for the complete dependency set.
-
-Local and cloud mode are switchable in the UI (📂 / ☁ toggle). Local mode never talks to any auth server.
-
----
-
 ## Tech
 
-- **Backend:** FastAPI (Python), Pillow, ffmpeg. Local mode is a single self-contained app (`backend/main.py`) with an SQLite thumbnail cache — no server database.
+- **Backend:** FastAPI (Python), Pillow, ffmpeg. A single self-contained app (`backend/main.py`) with an SQLite thumbnail cache — no server database.
 - **Frontend:** Vanilla JS (no framework), PWA.
-- **Cloud add-ons:** Supabase Auth, PostgreSQL + pgvector, Cloudflare R2, sentence-transformers (CLIP).
+- **External services:** none. The app makes no outbound calls (map tiles are opt-in and off until you enable them).
 
 ---
 
@@ -146,12 +142,12 @@ Local and cloud mode are switchable in the UI (📂 / ☁ toggle). Local mode ne
   GALLERYWEB_LAN=1 python main.py     # phone / same-Wi-Fi access
   ```
 
-  When you enable it, **anyone on that network can read, tag, and delete your photos** via the API — the server prints a warning to remind you. Only do it on a network you trust, and never expose local mode directly to the internet — use the hosted/cloud mode (with accounts) for multi-user or public deployments.
+  When you enable it, **anyone on that network can read, tag, and delete your photos** via the API — the server prints a warning to remind you. Only do it on a network you trust, and **never expose GalleryWeb directly to the internet** — it has no authentication layer, so there is no safe public deployment mode.
 
   > 🇹🇷 **Yerel modda giriş/parola yoktur — bu bilinçli bir tasarım (tek kişilik masaüstü kullanımı).** Bu yüzden sunucu artık **yalnızca `127.0.0.1`** dinler; hiçbir şey makinenizden dışarı çıkmaz. Ağa açmak isteğe bağlıdır: `GALLERYWEB_LAN=1 python main.py`. Açtığınızda **aynı ağdaki herkes** fotoğraflarınızı görebilir, etiketleyebilir ve silebilir — sunucu bunu açılışta uyarı olarak yazar. Yalnızca güvendiğiniz bir ağda açın, yerel modu **doğrudan internete açmayın**.
 
-- If you deploy behind a reverse proxy for cloud mode, set `ALLOWED_ORIGINS` to your exact domains (never `*` — the server rejects `*` and falls back to localhost).
-- Never commit your `.env` (it's git-ignored). Copy `.env.example` and fill in your own keys for cloud mode.
+- If you put it behind a reverse proxy, set `ALLOWED_ORIGINS` to your exact domains (never `*` — the server rejects `*` and falls back to localhost).
+- Never commit your `.env` (it's git-ignored). Copy `.env.example` if you want to change the port or data directory.
 - See [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 
 ---
@@ -160,7 +156,7 @@ Local and cloud mode are switchable in the UI (📂 / ☁ toggle). Local mode ne
 
 **GNU AGPL-3.0** — see [LICENSE](LICENSE).
 
-You are free to use, modify, and self-host GalleryWeb. If you run a **modified version as a network service**, the AGPL requires you to make your source code available to its users. This keeps the project open while allowing the original authors to offer a hosted service.
+You are free to use, modify, and self-host GalleryWeb. If you run a **modified version as a network service**, the AGPL requires you to make your source code available to its users. This keeps the project open for everyone who builds on it.
 
 ---
 

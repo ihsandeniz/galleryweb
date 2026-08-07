@@ -304,19 +304,19 @@ async def add_security_headers(request: Request, call_next):
     # fonts.googleapis / fonts.gstatic / unpkg izinleri KALDIRILDI. Böylece bir
     # regresyon CDN linkini geri getirse bile tarayıcı isteği bloklar.
     #
-    # Kalan iki dış izin yalnızca BULUT modu içindir ve yerel modda tetiklenmez:
-    #   cdn.jsdelivr             → Supabase JS (realtime.js lazy yükler)
-    #   *.supabase.co            → bulut API + realtime websocket
+    # 2026-08-07: Bulut (SaaS) modu kaldırıldı → onun için açık tutulan iki dış izin
+    # de KALDIRILDI: `cdn.jsdelivr` (Supabase JS'i lazy yüklerdi) ve `*.supabase.co`.
+    # Artık script-src ve connect-src tamamen 'self' — dış kaynak sıfır.
     # img-src'deki OpenStreetMap ise harita altlığı içindir ve kullanıcı açıkça
     # onay verene kadar istenmez (frontend: _mapTilePref). CSP burada yalnızca
     # tavan çizer — asıl kapı istemcide.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
         "media-src 'self' blob: data:; "
-        "connect-src 'self' ws: wss: https://*.supabase.co; "
+        "connect-src 'self' ws: wss:; "
         "font-src 'self' data:"
     )
     return response

@@ -1,8 +1,11 @@
 // ========== Mode & API Base URL ==========
-const MODE = localStorage.getItem('galleryMode') || 'yerel';
-const API_BASE = MODE === 'yerel'
-    ? `${window.location.origin}/yerel/api`
-    : `${window.location.origin}/api`;
+// 2026-08-07: Bulut (SaaS) katmanı kaldırıldı — arkasında hiç yayınlanmamış bir
+// backend vardı, `localStorage.galleryMode = 'bulut'` kullanıcıyı sunucusuz bir
+// moda düşürüyordu. MODE artık sabit. Eski tarayıcılarda kalmış 'bulut' değeri
+// aşağıda temizleniyor, yoksa o kullanıcılar kırık modda kilitli kalırdı.
+const MODE = 'yerel';
+try { localStorage.removeItem('galleryMode'); } catch (_) {}
+const API_BASE = `${window.location.origin}/yerel/api`;
 
 // ========== Global State ==========
 let state = {
@@ -36,9 +39,7 @@ let state = {
     activeAlbum: null,
     imageMtimes: {},
     // Bulut modu
-    cloudPhotos: [],
     cloudGalleries: [],
-    activeGalleryId: null,
 };
 
 // ========== DOM Elements ==========
@@ -598,51 +599,8 @@ async function init() {
 
     elements.emptyState.classList.remove('hidden');
 
-    // Mode switch button
-    const modeSwitchBtn = document.getElementById('modeSwitchBtn');
-    if (modeSwitchBtn) {
-        modeSwitchBtn.textContent = MODE === 'bulut' ? '☁' : '📂';
-        modeSwitchBtn.title = MODE === 'bulut' ? 'Yerel moda geç' : 'Bulut moduna geç';
-        modeSwitchBtn.addEventListener('click', () => {
-            const next = MODE === 'yerel' ? 'bulut' : 'yerel';
-            localStorage.setItem('galleryMode', next);
-            window.location.reload();
-        });
-    }
-
-    if (MODE === 'bulut') {
-        // Bulut modu: galeri listesini yükle
-        const cloudSection = document.getElementById('cloudSection');
-        const yerelSection = document.getElementById('yerelSection');
-        if (cloudSection) cloudSection.style.display = '';
-        if (yerelSection) yerelSection.style.display = 'none';
-
-        const cloudGallerySelect = document.getElementById('cloudGallerySelect');
-        const cloudUploadBtn = document.getElementById('cloudUploadBtn');
-        const cloudFileInput = document.getElementById('cloudFileInput');
-
-        if (cloudGallerySelect) {
-            cloudGallerySelect.addEventListener('change', () => {
-                state.activeGalleryId = cloudGallerySelect.value || null;
-                if (state.activeGalleryId) loadCloudPhotos();
-                else { state.cloudPhotos = []; elements.gallery.innerHTML = ''; elements.emptyState.classList.remove('hidden'); }
-            });
-        }
-        if (cloudUploadBtn && cloudFileInput) {
-            cloudUploadBtn.addEventListener('click', () => cloudFileInput.click());
-            cloudFileInput.addEventListener('change', () => {
-                if (cloudFileInput.files.length > 0) uploadCloudFiles(cloudFileInput.files);
-            });
-        }
-
-        loadCloudGalleries();
-    } else {
-        // Yerel modu
-        const cloudSection = document.getElementById('cloudSection');
-        const yerelSection = document.getElementById('yerelSection');
-        if (cloudSection) cloudSection.style.display = 'none';
-        if (yerelSection) yerelSection.style.display = '';
-
+    // Tek mod: yerel. (Bulut/SaaS dalı ve 📂/☁ geçiş düğmesi 2026-08-07'de kaldırıldı.)
+    {
         const savedPath = localStorage.getItem('galleryPath');
         if (savedPath) {
             autoConnectDirectory(savedPath);
@@ -916,7 +874,6 @@ function getHistory() {
 
 // ========== Load Images ==========
 async function loadImages() {
-    if (MODE === 'bulut') { await loadCloudPhotos(); return; }
     if (!state.currentDirectory) return;
     try {
         showLoading();
@@ -954,154 +911,7 @@ async function loadImages() {
     }
 }
 
-// ========== BULUT MODU FONKSİYONLARI ==========
-
-function getCloudThumbUrl(photoId, size) {
-    const token = window.GW && window.GW.getToken ? window.GW.getToken() : '';
-    return `${window.location.origin}/api/photos/${photoId}/thumb?size=${size}&token=${encodeURIComponent(token)}`;
-}
-
-async function loadCloudGalleries() {
-    if (!window.GW || !window.GW.isTokenValid()) {
-        window.location.href = '/login';
-        return;
-    }
-    try {
-        const res = await fetch(`${window.location.origin}/api/galleries`, {
-            headers: window.GW.authHeaders(),
-        });
-        if (!res.ok) { if (res.status === 401) { window.location.href = '/login'; } return; }
-        const data = await res.json();
-        state.cloudGalleries = data;
-        const sel = document.getElementById('cloudGallerySelect');
-        if (!sel) return;
-        sel.innerHTML = '<option value="">Galeri seçin...</option>';
-        data.forEach(g => {
-            const opt = document.createElement('option');
-            opt.value = g.id;
-            opt.textContent = g.name;
-            sel.appendChild(opt);
-        });
-        if (data.length > 0) {
-            sel.value = data[0].id;
-            state.activeGalleryId = data[0].id;
-            loadCloudPhotos();
-        } else {
-            elements.emptyState.classList.remove('hidden');
-            elements.emptyState.innerHTML = '<p>☁ Henüz galeri yok. Önce bir galeri oluşturun.</p>';
-        }
-    } catch (err) {
-        console.error(err);
-        showToast('Galeriler yüklenemedi', 'error');
-    }
-}
-
-async function loadCloudPhotos() {
-    if (!state.activeGalleryId) return;
-    if (!window.GW || !window.GW.isTokenValid()) { window.location.href = '/login'; return; }
-    try {
-        showLoading();
-        elements.emptyState.classList.add('hidden');
-        const res = await fetch(`${window.location.origin}/api/photos?gallery_id=${state.activeGalleryId}`, {
-            headers: window.GW.authHeaders(),
-        });
-        if (!res.ok) throw new Error('Fotoğraflar yüklenemedi');
-        const data = await res.json();
-        state.cloudPhotos = Array.isArray(data) ? data : (data.photos || []);
-        renderCloudGallery();
-    } catch (err) {
-        console.error(err);
-        showToast('Fotoğraflar yüklenirken hata oluştu', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-function buildCloudItem(photo, index) {
-    const item = document.createElement('div');
-    item.className = 'gallery-item';
-    item.dataset.index = index;
-    const img = document.createElement('img');
-    img.src = getCloudThumbUrl(photo.id, 'md');
-    img.alt = photo.filename || '';
-    img.loading = 'lazy';
-    img.onerror = () => { img.src = ''; img.style.background = '#333'; };
-    item.appendChild(img);
-    const label = document.createElement('div');
-    label.className = 'item-label';
-    label.textContent = photo.filename || '';
-    item.appendChild(label);
-    item.addEventListener('click', () => openCloudLightbox(index));
-    return item;
-}
-
-function renderCloudGallery() {
-    elements.gallery.innerHTML = '';
-    if (!state.cloudPhotos.length) {
-        elements.emptyState.classList.remove('hidden');
-        elements.emptyState.innerHTML = '<p>☁ Bu galeride henüz fotoğraf yok.</p>';
-        return;
-    }
-    elements.emptyState.classList.add('hidden');
-    const frag = document.createDocumentFragment();
-    state.cloudPhotos.forEach((photo, i) => frag.appendChild(buildCloudItem(photo, i)));
-    elements.gallery.appendChild(frag);
-}
-
-function openCloudLightbox(index) {
-    const photo = state.cloudPhotos[index];
-    if (!photo) return;
-    state.currentImageIndex = index;
-    const isVideo = /\.(mp4|webm|mov)$/i.test(photo.filename || '');
-    resetZoom();
-    if (isVideo) {
-        _videoActive = true;
-        elements.lightboxImage.classList.add('hidden');
-        elements.lightboxVideo.classList.remove('hidden');
-        const token = window.GW && window.GW.getToken ? window.GW.getToken() : '';
-        elements.lightboxVideo.src = `${window.location.origin}/api/photos/${photo.id}/file?token=${encodeURIComponent(token)}`;
-        if (state.videoAutoplay) elements.lightboxVideo.play().catch(() => {});
-    } else {
-        _videoActive = false;
-        elements.lightboxVideo.pause();
-        elements.lightboxVideo.removeAttribute('src');
-        elements.lightboxVideo.load();
-        elements.lightboxImage.classList.remove('hidden');
-        elements.lightboxVideo.classList.add('hidden');
-        elements.lightboxImage.src = getCloudThumbUrl(photo.id, 'lg');
-    }
-    elements.autoplayToggleBtn.classList.toggle('active', state.videoAutoplay);
-    elements.imageName.textContent = photo.filename || '';
-    elements.imageCounter.textContent = `${index + 1} / ${state.cloudPhotos.length}`;
-    elements.lightbox.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-}
-
-async function uploadCloudFiles(files) {
-    if (!state.activeGalleryId) { showToast('Önce bir galeri seçin', 'warning'); return; }
-    if (!window.GW || !window.GW.isTokenValid()) { window.location.href = '/login'; return; }
-    const total = files.length;
-    let done = 0;
-    showToast(`${total} fotoğraf yükleniyor...`, 'info');
-    for (const file of files) {
-        try {
-            const form = new FormData();
-            form.append('file', file);
-            form.append('gallery_id', state.activeGalleryId);
-            const res = await fetch(`${window.location.origin}/api/photos`, {
-                method: 'POST',
-                headers: window.GW.authHeaders(),
-                body: form,
-            });
-            if (res.ok) done++;
-        } catch (err) {
-            console.error(err);
-        }
-    }
-    showToast(`${done}/${total} fotoğraf yüklendi`, done === total ? 'success' : 'warning');
-    await loadCloudPhotos();
-    document.getElementById('cloudFileInput').value = '';
-}
+// (Bulut modu fonksiyonları 2026-08-07'de kaldırıldı — SaaS katmanı söküldü.)
 
 // ========== Favorites ==========
 async function loadFavorites() {
@@ -2169,7 +1979,6 @@ let _autoplayAdvancing = false;  // ended/error handler aktif mi?
 let _navigating = false;         // showNextImage/showPrevImage kilit
 
 function openLightbox(index) {
-    if (MODE === 'bulut') { openCloudLightbox(index); return; }
     state.currentImageIndex = index;
     const imagePath = state.images[index];
     const isVideo = /\.(mp4|webm|mov)$/i.test(imagePath);
@@ -2699,11 +2508,6 @@ async function showPrevImage() {
     if (_navigating) return;
     _navigating = true;
     try {
-        if (MODE === 'bulut') {
-            const prevIdx = state.currentImageIndex - 1;
-            if (prevIdx >= 0) openCloudLightbox(prevIdx);
-            return;
-        }
         const prevIdx = state.currentImageIndex - 1;
         if (prevIdx >= 0) {
             openLightbox(prevIdx);
@@ -2720,11 +2524,6 @@ async function showNextImage() {
     if (_navigating) return;
     _navigating = true;
     try {
-        if (MODE === 'bulut') {
-            const nextIdx = state.currentImageIndex + 1;
-            if (nextIdx < state.cloudPhotos.length) openCloudLightbox(nextIdx);
-            return;
-        }
         const nextIdx = state.currentImageIndex + 1;
         if (nextIdx < state.images.length) {
             openLightbox(nextIdx);

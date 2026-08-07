@@ -6,8 +6,9 @@
 # Fotoğraflarınız: ./photos klasörüne koyun (veya aşağıdaki volume yolunu değiştirin),
 # sonra arayüzden "Klasör Aç" ile /photos dizinini seçin.
 #
-# NOT: Bu compose YEREL modu (login'siz self-host) çalıştırır. Çok kullanıcılı
-#      hosted SaaS (Supabase + pgvector) kurulumu için SETUP.md dosyasına bakın.
+# NOT: GalleryWeb tek modda çalışır — login'siz, yerel, kendi diskinizde.
+#      Veritabanı kurulumu YOKTUR; küçük resim önbelleği SQLite (stdlib) kullanır.
+#      (Bir zamanlar planlanan çok kullanıcılı SaaS katmanı 2026-08-07'de kaldırıldı.)
 
 services:
   galleryweb:

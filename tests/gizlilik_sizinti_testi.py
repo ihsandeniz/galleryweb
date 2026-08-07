@@ -8,7 +8,8 @@ konumlarını dışarı bildirir.
 Bu yüzden kodda kapatılanlar:
   · Inter + JetBrains Mono   → frontend/vendor/fonts/  (Google Fonts YOK)
   · Leaflet CSS/JS + ikonlar → frontend/vendor/leaflet/ (unpkg YOK)
-  · Supabase JS              → yalnız bulut modunda lazy yüklenir (jsdelivr)
+  · Supabase JS / jsdelivr   → bulut (SaaS) katmanıyla birlikte tamamen KALDIRILDI
+                               (2026-08-07); CSP'de artık izinli değil
   · OpenStreetMap altlığı    → açık kullanıcı onayına bağlı (varsayılan KAPALI)
 
 Bu test bir CDN linki geri sızarsa kırılır ve bunu yakalar.
