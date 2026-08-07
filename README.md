@@ -14,12 +14,21 @@ A self-hostable photo & video gallery with a built-in **editing studio** — cro
 |---|---|
 | **Who** | Anyone, on their own PC |
 | **Login** | ❌ None — open the app and go |
-| **Data** | Stays on your disk. No account, no telemetry, no outbound calls |
+| **Data** | Stays on your disk. No account, no telemetry, no outbound calls by default¹ |
 | **Setup** | Double-click `run.sh` / `run.bat` (or `docker compose up`) |
 | **Database** | None to install — the thumbnail cache uses SQLite (stdlib) |
 | **Cost** | Free forever |
 
-There is **one mode**: local. No external service is required or contacted.
+There is **one mode**: local. No external service is required.
+
+> ¹ **The one exception, and it is opt-in.** The map view can draw an OpenStreetMap
+> basemap. That basemap is **off by default**: the app shows a consent panel explaining
+> that requesting tiles reveals *where your photos were taken* to `openstreetmap.org`
+> (the photos themselves are never uploaded), and the map works without it — markers on
+> a blank canvas. Turn it on and it is remembered per device; you can reset the choice
+> from the footer. Fonts and Leaflet are vendored locally, so nothing else leaves the
+> machine. Verified against the code, 2026-08-07 (`frontend/js/gallery.js`, the
+> `img-src` allow-list in `backend/main.py`).
 
 > **Note (2026-08-07):** earlier versions of this README also advertised a multi-tenant
 > "hosted/cloud mode" (Supabase + PostgreSQL). That layer never shipped — it was an

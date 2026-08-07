@@ -19,12 +19,18 @@ paketinin içeriğini doğruluyor. Ama CI'nın **yapamadığı** altı şey var 
 
 ## Paketi indir
 
-**En kolay yol —** https://github.com/ihsandeniz/galleryweb/releases → en üstteki
-**`v1.1.0` (Draft)** → `GalleryWeb_1.1.0_x64-setup.exe` (227 MB).
-*Taslak sürümü yalnız sen görürsün; dışarıya kapalıdır.*
+> 🔴 **2026-08-07 — taslak release'deki paket BAYAT, oradan indirme.**
+> `v1.1.0` taslağındaki `GalleryWeb_1.1.0_x64-setup.exe` **2026-07-28'de** yüklendi (226 MB).
+> O tarihten sonra bulut/SaaS katmanı ve sabit parolalı demo giriş depodan kaldırıldı
+> (`3814181`, `024f94d`) — yani taslaktaki paket **artık var olmayan kodu** içeriyor,
+> ölü ☁ düğmesi dahil. Onunla test edersen yayınlanmayacak bir sürümü sınamış olursun.
+> Taslak varlıkları tazelenene kadar **tek doğru kaynak CI artifact'ıdır.**
 
-Alternatif: https://github.com/ihsandeniz/galleryweb/actions → yeşil **CI** koşusu →
-**Artifacts** → `galleryweb-windows`.
+**Doğru yol —** https://github.com/ihsandeniz/galleryweb/actions → yeşil **CI** koşusu
+(`19acaf09` veya daha yenisi) → **Artifacts** → `galleryweb-windows` (232 MB, 30 gün durur).
+
+> ⚠️ **VM'in İÇİNDEN, tarayıcıyla indir.** Paylaşılan klasörle kopyalarsan dosyaya
+> *Mark of the Web* basılmaz, SmartScreen hiç çıkmaz ve aşağıdaki 1. madde **sahte geçer**.
 
 > Bu paket **imzasız**. Aşağıdaki 1. madde tam olarak bunu sınıyor — beklenen davranıştır.
 

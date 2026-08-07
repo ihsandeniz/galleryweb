@@ -48,9 +48,27 @@ istisna fırlatmıyordu — kullanıcı sadece işin **olmadığını** görüyo
 - **Paket artık CI'da üretiliyor.** Her push'ta testler gerçek Windows'ta koşuyor, paket
   derleniyor ve kurulum dosyası **açılıp içeriği doğrulanıyor**.
 
+## 🧹 Yayınlanmamış bulut katmanı depodan kaldırıldı
+
+Bu sürüm aynı zamanda **hiç yayınlanmamış** bir çok kullanıcılı "bulut modu"
+iskeletini deponun dışına çıkarıyor (`3814181`, `024f94d` — 48 dosya, −3816 satır):
+
+- **Arayüzdeki ☁ düğmesi gitti.** Düğme çalışmayan bir moda geçiriyordu; tercih
+  tarayıcıda saklandığı için bir kez basan kullanıcı galeriyi **kapatıp açsa bile**
+  bozuk modda kalıyordu. Sürüm, eski tercihi açılışta temizler — bir şey yapmanız
+  gerekmez.
+- **Sabit parolalı "demo giriş"** (`DEMO_USERS`, `/auth/*`) kaldırıldı. Açık kaynak
+  bir depoda parola sabitlemek, kimse kullanmasa bile yanlıştı.
+- Supabase CLI'ın bıraktığı `supabase/.temp/` klasörü depoya girmişti — silindi ve
+  `.gitignore`'a eklendi.
+
+Yerel modu (tek mod) kullanan hiçbir davranış değişmedi.
+
 ## 🧪 Bu sürüm nasıl doğrulandı
 
-- 24 otomatik test — **hem Linux hem Windows'ta**
+- **28 otomatik test — hem Linux hem Windows'ta.** Aynı takım iki işletim sisteminde
+  koşar, platforma özgü olanlar diğerinde atlanır: Linux'ta 24 geçti / 4 atlandı,
+  Windows'ta 27 geçti / 1 atlandı (CI koşusu `19acaf09`).
 - Paket duman testi: derlenen exe gerçekten çalıştırılıp galeri, Türkçe dosya adları,
   küçük resim üretimi ve düzenleme zinciri sınanıyor
 - NSIS kurulum paketi açılıp sunucunun içinde olduğu doğrulanıyor

@@ -4,6 +4,25 @@
 **Status:** Token security issues FIXED  
 **Updated File:** `backend/main.py`
 
+> ⚠️ **PARTLY HISTORICAL — read this first (2026-08-07).**
+> Everything below about **auth** describes code that **no longer exists**. The "Demo Auth"
+> layer (`DEMO_USERS`, `/auth/*` endpoints, `TOKEN_SECRET`, `_sign_token`, `login.html`,
+> `frontend/js/auth.js`) and the entire unreleased cloud/Supabase layer were removed on
+> 2026-08-07 (`3814181`, `024f94d`). **GalleryWeb has no login, no tokens and no
+> `TOKEN_SECRET`** — the § *Refresh Token Security*, § *Environment Variables* and
+> § *Production Recommendations* sections are kept as a record of what was fixed and
+> then deleted, not as instructions. `.env.example` lists the variables the code actually
+> reads.
+>
+> **Still accurate** (re-measured 2026-08-07 against live code): `r2_key`/`local_path` are
+> gone from API responses (no occurrence in `backend/main.py`) · `ALLOWED_ORIGINS='*'` is
+> rejected and falls back to localhost (`backend/main.py:49`) · the Docker container runs
+> non-root (`Dockerfile:34`) · local mode has **no auth by design**, with the network-exposure
+> warning in the README and `HOST`/`GALLERYWEB_LAN` opt-in (`backend/main.py:2517`, `:1589`).
+>
+> The deferred item "*move auth tokens from localStorage to httpOnly cookies*" is
+> **void, not deferred** — there are no tokens left to move.
+
 ---
 
 ## 2026-07-23 — Full audit round (test team) / Tam denetim turu
