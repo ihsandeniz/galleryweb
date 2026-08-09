@@ -8,8 +8,20 @@ yolda, Windows'ta sessizce yanlış çalışan altı davranış düzeltildi.
 | Platform | Dosya |
 |---|---|
 | **Windows 10 / 11** | `GalleryWeb_1.1.0_x64-setup.exe` |
-| **Linux (taşınabilir)** | `GalleryWeb_1.1.0_amd64.AppImage` |
-| **Linux (Debian/Ubuntu)** | `GalleryWeb_1.1.0_amd64.deb` |
+| **Linux (Debian 13+ / Ubuntu 24.04+)** | `GalleryWeb_1.1.0_amd64.deb` — **glibc ≥ 2.38 gerekir**, aşağıya bakın |
+
+> **Linux paketi için sürüm kısıtı gerçek bir kısıttır.** `deb` **Debian 13 (trixie)** ve
+> **Ubuntu 24.04** üzerinde çalışıyor; **Debian 12 (bookworm) ve Ubuntu 22.04'te açılmaz**
+> (`GLIBC_2.38 not found`). Kurulum bu sistemlerde **hatasız tamamlanır** — `apt` engellemez,
+> çünkü paket `libc6` alt sınırını beyan etmiyor — ama uygulama başlamaz. Ölçüldü:
+> `debian:12` kabında açılmadı, `debian:13` kabında kalktı.
+>
+> **AppImage bu sürümde YAYINLANMADI.** v1.0.0'daki AppImage, derleyen makinenin
+> (Arch, glibc 2.44) sistem kütüphanelerini paketlediği için pratikte yalnızca rolling
+> dağıtımlarda açılıyordu — Debian 13 ve Ubuntu 24.04 dahil **hiçbir LTS'te** çalışmıyor
+> (`GLIBC_2.43 not found`, kapta doğrulandı). "Taşınabilir" diye sunmak yanlış olurdu.
+> Kalıcı çözüm Linux paketlerini de CI'da eski bir tabanda derlemek; o iş yapılana kadar
+> AppImage yayınlanmıyor.
 
 > **Windows'ta “Windows bilgisayarınızı korudu” uyarısı çıkacak.** Paket imzasızdır —
 > kod imzalama sertifikası yıllık $200-400 ve bu ücretsiz, açık kaynak bir proje.
@@ -43,7 +55,7 @@ istisna fırlatmıyordu — kullanıcı sadece işin **olmadığını** görüyo
 
 - **Windows paketi klasör düzeninde (onedir).** Tek dosya paket **her açılışta**
   içeriğini geçici klasöre açıyordu; uygulama kapanınca siliniyor, sonraki açılışta
-  yeniden çıkarılıyordu. ~~~55 MB~~ **Ölçüldü (2026-08-07, Linux onefile yapısı):
+  yeniden çıkarılıyordu. ~~≈55 MB~~ **Ölçüldü (2026-08-07, Linux onefile yapısı):
   55 MB'lık paket geçici dizine `141 MB / 207 dosya` çıkarıyor** — 55 MB *sıkıştırılmış*
   boyuttu, diske yazılan bu. Windows'ta onedir düzeni bu adımı tamamen kaldırır
   (`galleryweb-server.spec`: `exclude_binaries=WINDOWS` + `COLLECT`).
@@ -51,8 +63,9 @@ istisna fırlatmıyordu — kullanıcı sadece işin **olmadığını** görüyo
   gerçek Windows Defender gerektirir, W3 turunda görülecek.
 - **WebView2 çevrimdışı kurucu gömüldü.** Kurulum artık internet istemiyor. (Varsayılan
   davranış indirmekti; internetsiz makinede uygulama hiç açılmıyordu.)
-- **Paket artık CI'da üretiliyor.** Her push'ta testler gerçek Windows'ta koşuyor, paket
-  derleniyor ve kurulum dosyası **açılıp içeriği doğrulanıyor**.
+- **Windows paketi artık CI'da üretiliyor.** Her push'ta testler gerçek Windows'ta koşuyor,
+  paket derleniyor ve kurulum dosyası **açılıp içeriği doğrulanıyor**. (Linux paketi hâlâ
+  geliştirici makinesinde derleniyor — "Bilinen sınırlar"a bakın.)
 
 ## 🧹 Yayınlanmamış bulut katmanı depodan kaldırıldı
 
@@ -88,5 +101,10 @@ Yerel modu (tek mod) kullanan hiçbir davranış değişmedi.
 - Paket **imzasız** — SmartScreen uyarısı çıkar (yukarıya bakın).
 - **Video kesme için `ffmpeg` gerekir**; fotoğrafların hepsi ffmpeg'siz çalışır.
 - macOS paketi yok (derlenmedi, planlanmadı).
+- **AppImage yok** (yukarıdaki kutuya bakın) — Linux'ta tek paket `deb`, ve o da glibc ≥ 2.38 ister.
+- **Linux paketi CI'da değil, geliştirici makinesinde derleniyor.** Windows paketi GitHub
+  Actions'ta üretiliyor; Linux tarafı henüz taşınmadı. Yukarıdaki dağıtım kısıtının kök nedeni bu.
+- Gerçek bir Windows makinesinde kurulum turu **henüz yapılmadı** — doğrulama CI'daki
+  `windows-latest` koşusuna ve paket duman testine dayanıyor.
 
 **Tam değişiklik listesi:** https://github.com/ihsandeniz/galleryweb/compare/v1.0.0...v1.1.0

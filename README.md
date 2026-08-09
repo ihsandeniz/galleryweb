@@ -64,7 +64,23 @@ no Python, no terminal, no browser tab:
 | Platform | File | Notes |
 |---|---|---|
 | **Windows 10 / 11** | `GalleryWeb_x.y.z_x64-setup.exe` | Includes the WebView2 runtime — installs without internet |
-| **Linux** | `.AppImage` (portable) or `.deb` | AppImage: `chmod +x` then run |
+| **Linux (Debian 13+ / Ubuntu 24.04+)** | `GalleryWeb_x.y.z_amd64.deb` | Requires **glibc ≥ 2.38** — see the note below |
+
+> **The Linux version requirement is a real one.** The `.deb` runs on **Debian 13 (trixie)**
+> and **Ubuntu 24.04**; on **Debian 12 (bookworm) and Ubuntu 22.04 it will not start**
+> (`GLIBC_2.38 not found`). Installation still **succeeds without errors** on those systems —
+> `apt` does not block it, because the package declares no `libc6` lower bound — but the app
+> won't launch. Measured: failed in a `debian:12` container, started in `debian:13`.
+> **No AppImage is published as of v1.1.0** — the v1.0.0 AppImage bundled the build machine's
+> system libraries (Arch, glibc 2.44), so in practice it only opened on rolling distros and on
+> **no LTS at all**. It will return once the Linux packages are built in CI on an older base.
+> If you're on an older distro, use **Option B** below (runs from source, no glibc constraint).
+
+> 🇹🇷 **Linux paketi için sürüm kısıtı gerçektir.** `deb`, **Debian 13** ve **Ubuntu 24.04**
+> üzerinde çalışır; **Debian 12 ve Ubuntu 22.04'te açılmaz** (`GLIBC_2.38 not found`) — kurulum
+> hatasız tamamlanır ama uygulama başlamaz. **v1.1.0 itibarıyla AppImage yayınlanmıyor**
+> (derleyen makinenin kütüphanelerini paketlediği için hiçbir LTS'te açılmıyordu). Eski bir
+> dağıtımdaysanız aşağıdaki **Option B**'yi kullanın — kaynaktan çalışır, bu kısıt yoktur.
 
 > **Windows: “Windows protected your PC”** — the installer is **unsigned** (a code-signing
 > certificate costs $200–400/year and this is a free, open-source project). Click

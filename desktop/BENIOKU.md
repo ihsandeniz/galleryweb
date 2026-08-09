@@ -129,6 +129,11 @@ Sanal ekranda (Xvfb) uçtan uca test — senin masaüstünü etkilemez:
 çalıştı · gömülü sunucu kalktı · HTTP 200 · webview galeriyi yükledi · gerçek klasörden 7 dosya
 listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalmadı.
 
+> ⚠️ **Bu tur yalnızca geliştirme makinesinde (Arch) yapıldı** — yani "çalıştı" sonucu
+> derleyen sistemin kendisinde alındı. Başka dağıtımlarda ölçüldüğünde AppImage hiçbir
+> LTS'te açılmadı (aşağıdaki glibc kutusu). Tek makinede geçen paket testi, paketin
+> *taşınabilir* olduğunu kanıtlamaz.
+
 > **Testin kendisinde bulunan tuzak:** paket testleri geliştirme makinesinde koşarken
 > `desktop/dist/` klasörü de duruyor. Kod önce paket içindeki kaynağa, bulamazsa bu
 > geliştirme yoluna düşüyordu — yani paketleme bozuk olsa bile test GEÇİYORDU. Artık
@@ -143,8 +148,15 @@ listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalma
 
 | Paket | Boyut | Not |
 |---|---|---|
-| `.deb` | 54 MB | Sistem GTK/WebKit'ini kullanır |
-| `.AppImage` | 147 MB | GTK/WebKit'i de içine alır — hiçbir bağımlılık istemez |
+| `.deb` | 54 MB | Sistem GTK/WebKit'ini kullanır — **glibc ≥ 2.38** ister (Debian 13+ / Ubuntu 24.04+) |
+| `.AppImage` | 147 MB | GTK/WebKit'i içine alır ama **glibc'yi almaz** — aşağıya bakın |
+
+> ⚠️ **AppImage "hiçbir bağımlılık istemez" DEĞİL — ve v1.1.0'da yayınlanmadı.** Ölçüldü:
+> Arch'ta (glibc 2.44) derlenen AppImage, Debian 13 ve Ubuntu 24.04 dahil **hiçbir LTS'te
+> açılmıyor** (`GLIBC_2.43 not found`, kapta doğrulandı). Kök neden: Linux paketleri CI'da
+> değil, geliştirici makinesinde derleniyor — derleyen sistemin glibc'si taban oluyor.
+> Kalıcı çözüm Linux yapısını da CI'ya, eski bir tabana taşımak. O yapılana kadar
+> yayınlanan tek Linux paketi `deb`.
 
 ## Video oynatma (AppImage)
 
