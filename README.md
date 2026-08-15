@@ -72,7 +72,7 @@ no Python, no terminal, no browser tab:
 > published `.deb` needs `GLIBC_2.39` (won't start on Debian 12 / Ubuntu 22.04, and `apt`
 > installs it anyway because the package declared no `libc6` lower bound), and the v1.0.0
 > AppImage bundled Arch's system libraries and opened on **no LTS at all**.
-> **From the next release on**, both are built by [GitHub Actions](https://github.com/ihsandeniz/galleryweb/actions)
+> **As of v1.1.1**, both are built by [GitHub Actions](https://github.com/ihsandeniz/galleryweb/actions)
 > on Ubuntu 22.04 (glibc 2.35), the `.deb` declares `libc6 (>= 2.35)` so `apt` refuses rather
 > than installing something broken, and every build is installed and started inside a
 > `debian:12` container before it may be published. If you're on something older, use
@@ -82,7 +82,7 @@ no Python, no terminal, no browser tab:
 > glibc'sini taban alır. **v1.1.0 dahil paketler Arch'ta (glibc 2.44) derlendiği için**
 > dağıtılamazdı: yayındaki `.deb` `GLIBC_2.39` istiyor (Debian 12 / Ubuntu 22.04'te açılmaz,
 > üstelik `libc6` alt sınırı beyan edilmediği için apt sessizce kuruyordu), v1.0.0 AppImage'ı
-> ise hiçbir LTS'te açılmıyordu. **Sonraki sürümden itibaren** ikisi de GitHub Actions'ta
+> ise hiçbir LTS'te açılmıyordu. **v1.1.1'den itibaren** ikisi de GitHub Actions'ta
 > Ubuntu 22.04 (glibc 2.35) üzerinde üretiliyor, `.deb` artık `libc6 (>= 2.35)` beyan ediyor
 > ve her paket yayınlanmadan önce `debian:12` kabında kurulup çalıştırılarak sınanıyor.
 > Daha eski bir dağıtımdaysanız aşağıdaki **Option B** kaynaktan çalışır, bu kısıt yoktur.
