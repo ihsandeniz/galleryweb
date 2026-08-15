@@ -84,6 +84,13 @@ def main() -> int:
     Image.new("RGB", (80, 60), (20, 120, 180)).save(galeri / "deneme.jpg")
     # Windows'ta kodlama/URL kaçışı en çok burada patlıyor
     Image.new("RGB", (40, 40), (200, 80, 20)).save(galeri / "İstanbul Boğazı.jpg")
+    # GPS EXIF'li üçüncü fotoğraf: harita ucunu PAKETİN İÇİNDE sınamak için.
+    # Harita özelliği aylarca kırıktı ve kimse fark etmedi çünkü hiçbir test
+    # ondan DOLU bir sonuç beklemiyordu (bkz. aşağıdaki adım).
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from gizlilik_fikstur import ENLEM, BOYLAM, uret as gps_foto_uret
+    gps_klasor = galeri / "gps"
+    gps_foto_uret(gps_klasor)
 
     ortam = {**os.environ, "PORT": str(PORT), "GALLERYWEB_DATA_DIR": str(veri),
              "GALLERYWEB_DESKTOP": "1"}
@@ -154,6 +161,38 @@ def main() -> int:
             hatalar.append("düzenleme zinciri çalışmadı")
         else:
             yaz("✓ düzenleme zinciri")
+
+        # Paket kendi sürümünü doğru söylüyor mu? Paketler "1.1.0" derken çalışan
+        # uygulama kendini OpenAPI'de "0.1.0" diye tanıtıyordu — yani artefaktın
+        # üstündeki sayı ile içindeki sayı ayrışabiliyor ve bunu kimse görmüyordu.
+        try:
+            kod, gövde = istek("/openapi.json")
+            surum = json.loads(gövde)["info"]["version"]
+            if surum == "0.1.0":
+                hatalar.append("uygulama sürümünü beyan etmiyor (OpenAPI 0.1.0)")
+            else:
+                yaz(f"✓ uygulama kendini {surum} olarak tanıtıyor")
+        except Exception as e:
+            hatalar.append(f"sürüm okunamadı: {e}")
+
+        # Harita: DOLU sonuç bekle. "200 döndü" testi bu hatayı GÖRMEZ — uç
+        # yıllarca {"images":[],"total":0} döndürdü, hata da vermedi.
+        try:
+            istek("/api/set-directory", {"path": str(gps_klasor)})
+            kod, gövde = istek("/api/images/map")
+            harita = json.loads(gövde)
+            if harita.get("total") != 1:
+                hatalar.append(f"harita GPS'li fotoğrafı görmedi: {harita}")
+            else:
+                pin = harita["images"][0]
+                if abs(pin["lat"] - ENLEM) > 1e-3 or abs(pin["lng"] - BOYLAM) > 1e-3:
+                    hatalar.append(f"harita koordinatı yanlış: {pin}")
+                else:
+                    yaz(f"✓ harita GPS okuyor ({pin['lat']:.4f}, {pin['lng']:.4f})")
+        except Exception as e:
+            hatalar.append(f"harita ucu: {e}")
+        finally:
+            istek("/api/set-directory", {"path": str(galeri)})
 
         if not (veri / "cache").exists():
             hatalar.append(f"veri dizini kullanılmadı: {veri}")

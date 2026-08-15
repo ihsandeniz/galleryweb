@@ -19,31 +19,27 @@ paketinin içeriğini doğruluyor. Ama CI'nın **yapamadığı** altı şey var 
 
 ## Paketi indir
 
-> ✅ **2026-08-07 17:04 — taslak paketler TAZELENDİ.** Bir süre bayattılar (07-28
-> sürümü, bugün silinen SaaS katmanını içeriyordu); üçü de değiştirildi.
-> Windows paketi `19acaf09` koşusunun CI çıktısıdır, Linux paketleri aynı ağaçtan
-> yerelde derlendi. Doğrulandı: kurulum paketi açıldı, içindeki
-> `_internal/frontend/js/gallery.js` **`MODE='yerel'`** taşıyor, bulut fonksiyonu
-> 0, `auth.js`/`saas-api.js`/`realtime.js`/`login.html` pakette **yok**.
-> **Ders kayda geçti** → `WIKI/ledger.md` §
-> `release/taslak-varlik-koddan-sonra-tazelenmez-bayat-paket-test-edilir`
+**https://github.com/ihsandeniz/galleryweb/releases → `v1.1.2` (Latest)**
+→ **`GalleryWeb_1.1.2_x64-setup.exe`** (**247 MB**)
 
-**En kolay yol —** https://github.com/ihsandeniz/galleryweb/releases → **`v1.1.1` (Latest)**
-→ `GalleryWeb_1.1.0_x64-setup.exe` (**232 MB**, 07-08-2026 17:04'te yüklendi).
-*Taslağı yalnız sen görürsün.*
+Sürüm **herkese açık** — VM'in içinden tarayıcıyla doğrudan indirebilirsin.
 
-Alternatif (aynı dosya): Actions → yeşil **CI** koşusu → **Artifacts** →
-`galleryweb-windows` (30 gün durur).
-
-> 🔎 **İndirmeden önce 5 saniyelik kontrol:** dosya boyutu **232 MB** olmalı.
-> 226 MB görüyorsan bayat sürüme bakıyorsundur — indirme, haber ver.
+> 🔎 **İndirmeden önce 5 saniyelik kontrol:** dosya adında **1.1.2** yazmalı ve boyut
+> **247 MB** olmalı. Başka bir sayı görüyorsan eski sürüme bakıyorsundur — indirme, haber ver.
 
 > ⚠️ **VM'in İÇİNDEN, tarayıcıyla indir.** Paylaşılan klasörle kopyalarsan dosyaya
 > *Mark of the Web* basılmaz, SmartScreen hiç çıkmaz ve aşağıdaki 1. madde **sahte geçer**.
 
 > Bu paket **imzasız**. Aşağıdaki 1. madde tam olarak bunu sınıyor — beklenen davranıştır.
 
+> 🐧 **Linux tarafı bu listeye girmiyor** — 2026-08-15'ten beri paketler CI'da derleniyor
+> ve her koşuda `debian:12` kabında kurulup çalıştırılarak doğrulanıyor
+> (`tests/linux_paket_dogrula.sh`). Windows'ta böyle bir otomatik kapı **kurulabilir
+> değil**: SmartScreen, Defender ve Controlled Folder Access ancak gerçek bir makinede
+> davranır. Bu listenin var olma sebebi budur.
+
 ---
+
 
 ## Kontrol listesi
 
@@ -105,6 +101,18 @@ ve büyük ihtimalle **hata bile vermez**, sadece kaydetmez.
       **Beklenen:** "Dosya başka bir program tarafından kullanılıyor" uyarısı
       (çıplak hata veya sahte "silindi" DEĞİL).
 
+### 8. `guncelle.bat` — hiç çalıştırılmadı (⭐ ikinci kritik madde)
+Kaynaktan kurulum yolunu kullananlar için güncelleyici. **Bugüne kadar gerçek bir
+Windows'ta hiç koşmadı** ve Wine'da sınanamıyor: Wine'ın sahte `powershell`'i hiçbir
+şey yapmadan `0` döndürdüğü için betik **başarısız güncellemeye "[TAMAM]" der** —
+yani yeşil çıktısı kanıt değil.
+
+- [ ] Depoyu ZIP olarak indir → aç → `run.bat` ile bir kez çalıştır (galeri açılsın)
+- [ ] `guncelle.bat`'a çift tıkla
+- [ ] **Beklenen:** indirir, kodun üstüne kopyalar, `.venv` / `photos` / ayarlar **korunur**
+- [ ] Sonra `run.bat` → galeri hâlâ açılıyor mu, fotoğrafların yerinde mi?
+- [ ] Ekranda hata çıktıysa **ham metni** yaz (özetleme — sahte "[TAMAM]" avlıyoruz)
+
 ---
 
 ## Sonucu nasıl ilet
@@ -115,17 +123,22 @@ Listeyi kopyalayıp yanına yazman yeterli. Özellikle şunları belirt:
 - **3. madde** açılış süresi — onedir kararının ölçüsü
 - Beklenmedik her ekran görüntüsü
 
-Bu liste tamamlanmadan `v1.1.0` yayınlanmayacak: paket imzasız ve gerçek bir Windows
-makinesinde hiç açılmadı. *"Kaynak yeşil ≠ ürün çalışıyor"* (Yuki v0.5.0 dersi).
+> ⚠️ **Bu liste bir yayın kapısıydı, artık değil — ve bu bir gerileme.** `v1.1.0`
+> 2026-08-08'de, `v1.1.1` ve `v1.1.2` 08-15'te liste tamamlanmadan yayınlandı.
+> Yani **şu an yayında olan Windows paketi hiçbir gerçek Windows makinesinde
+> açılmamış durumda**; doğrulama CI koşusuna, paket duman testine ve Wine turuna
+> dayanıyor. Üçü de "kurulum makinesinde ne oluyor" sorusuna cevap vermez.
+> *"Kaynak yeşil ≠ ürün çalışıyor"* (Yuki v0.5.0 dersi).
 
 ---
 
-## Liste geçtikten sonra (bende — 3 adım, ~5 dk)
+## Liste geçtikten sonra (bende)
 
-1. ~~`gh release edit v1.1.0 --draft=false`~~ → **yapıldı 2026-08-08**; güncel sürüm **v1.1.1** (2026-08-15)
-2. ~~`ihsan-web-site` reposunda `galleryweb-v1.1.0` dalını main'e al + push~~ →
-   ⛔ **BU DALI MERGE ETME.** Dal main'in 29 commit GERİSİNDE; merge edilirse
-   `takip.html`/`takip.css` gibi canlı sayfaları geri siler. İçeriği zaten
-   2026-08-15'te doğrudan main'e uygulandı (indirme bandı v1.1.1). Dal ölü.
-   (indirme linkleri o an canlıya çıkar — release'den ÖNCE push edilirse 404 verir)
-3. Sürüm notlarındaki yorum satırına gerçek makine doğrulaması eklenir
+1. Sonuçlar `WIKI/sources/projects/2026-05-03-galleryweb.md` § FAZ W3'e, ham hâliyle işlenir
+2. Çıkan her kusur için önce **başarısız bir test** yazılır, sonra düzeltilir
+3. Düzeltme gerekiyorsa yeni yama sürümü (v1.1.3) CI'dan çıkar — paket elle derlenmez
+
+> Eski 1. ve 2. adım (`release --draft=false` + site dalını merge) **artık geçersiz**:
+> sürüm 08-08'de yayına girdi, site indirme bandı da 08-15'te doğrudan `main`'e
+> uygulandı. ⛔ `ihsan-web-site`'taki `galleryweb-v1.1.0` dalını **merge etme** —
+> main'in 29 commit gerisinde, `takip.html`/`takip.css` gibi canlı sayfaları geri siler.
