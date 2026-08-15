@@ -3,6 +3,13 @@
   "bundle": {
     "resources": {
       "../dist/galleryweb-server": "galleryweb-server"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libc6 (>= 2.35)"
+        ]
+      }
     }
   }
 }

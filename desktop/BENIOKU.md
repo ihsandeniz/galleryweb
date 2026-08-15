@@ -148,15 +148,44 @@ listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalma
 
 | Paket | Boyut | Not |
 |---|---|---|
-| `.deb` | 54 MB | Sistem GTK/WebKit'ini kullanır — **glibc ≥ 2.38** ister (Debian 13+ / Ubuntu 24.04+) |
-| `.AppImage` | 147 MB | GTK/WebKit'i içine alır ama **glibc'yi almaz** — aşağıya bakın |
+| `.deb` | 54 MB | Sistem GTK/WebKit'ini kullanır — **glibc ≥ 2.35** ister, bunu artık `Depends:`te de beyan eder |
+| `.AppImage` | 199 MB | GTK/WebKit'i içine alır ama **glibc'yi almaz** — aşağıya bakın |
 
-> ⚠️ **AppImage "hiçbir bağımlılık istemez" DEĞİL — ve v1.1.0'da yayınlanmadı.** Ölçüldü:
-> Arch'ta (glibc 2.44) derlenen AppImage, Debian 13 ve Ubuntu 24.04 dahil **hiçbir LTS'te
-> açılmıyor** (`GLIBC_2.43 not found`, kapta doğrulandı). Kök neden: Linux paketleri CI'da
-> değil, geliştirici makinesinde derleniyor — derleyen sistemin glibc'si taban oluyor.
-> Kalıcı çözüm Linux yapısını da CI'ya, eski bir tabana taşımak. O yapılana kadar
-> yayınlanan tek Linux paketi `deb`.
+> ⚠️ **AppImage "hiçbir bağımlılık istemez" DEĞİL.** Gömdüğü kütüphaneler derleyen sistemin
+> glibc'sine bağlıdır ve AppRun onları yükleme yolunun BAŞINA koyar, yani kesin yüklenirler.
+> Arch'ta (glibc 2.44) derlenen v1.0.0 AppImage'ı bu yüzden Debian 13 ve Ubuntu 24.04 dahil
+> **hiçbir LTS'te açılmıyordu** (`GLIBC_2.43 not found`, kapta ölçüldü) ve v1.1.0'da bilerek
+> yayınlanmadı. **2026-08-15'te kök neden kapandı:** Linux paketleri artık CI'da,
+> **ubuntu-22.04 (glibc 2.35)** üzerinde üretiliyor.
+>
+> Ölçüm (aynı gün, yerel jammy kabında birebir prova): jammy'de derlenen AppImage'ın gömülü
+> kütüphanelerinin **tamamı** `debian:12`'de çözüldü, içindeki sunucu o kapta ayağa kalktı,
+> tüm ELF'lerin istediği en yüksek sürüm **2.35** çıktı. Aynı kapta Arch'ta derlenmiş eski
+> paket ilk adımda düştü (`GLIBC_2.39 not found`).
+
+## Linux paketleri nerede derleniyor
+
+**CI'da — `.github/workflows/ci.yml` → `linux-paket` işi.** `yap.sh` orada da elindekiyle
+aynı betiktir; CI'ya özel ikinci bir derleme yolu yoktur.
+
+Runner sürümü (`ubuntu-22.04`) **bilerek sabittir**, `ubuntu-latest` değildir: paket derlendiği
+makinenin glibc'sini taban alır, `ubuntu-latest` sessizce yeni bir LTS'e kayarsa paket eski
+dağıtımlarda ölür. Etiket emekliye ayrılıp yükseltmek gerekirse üç yer **birlikte** değişmeli:
+
+1. `ci.yml` → `linux-paket` işinin `runs-on`'u
+2. `tests/linux_paket_dogrula.sh` → `GLIBC_TABANI` (+ gerekiyorsa hedef kap `KAP_IMAJ`)
+3. `desktop/src-tauri/tauri.linux.conf.json` → `deb.depends` içindeki `libc6 (>= …)`
+
+Üçü ayrışırsa doğrulama işi kırmızıya döner — kasıtlı. `deb.depends`'e yazdığımız `libc6`
+alt sınırı Tauri'nin kendi eklediği webkit/gtk bağımlılıklarına **eklenir** (ölçüldü),
+onların yerine geçmez. Onsuz apt paketi eski dağıtıma da sorunsuz kurar, uygulama sonra hiç
+başlamaz — v1.1.0'ın sessiz kusuru buydu; `debian:11`'de artık apt açıkça reddediyor.
+
+Paketi elle sınamak istersen (docker gerekir, CI ile aynı betik):
+
+```bash
+tests/linux_paket_dogrula.sh desktop/src-tauri/target/release/bundle
+```
 
 ## Video oynatma (AppImage)
 
