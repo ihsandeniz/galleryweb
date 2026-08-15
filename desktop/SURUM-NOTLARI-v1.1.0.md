@@ -1,3 +1,9 @@
+> ⛔ **BU DOSYA TARİHSELDİR — v1.1.0'ın yayın notudur, güncel durumu anlatmaz.**
+> Aşağıdaki "AppImage yayınlanmıyor", "glibc ≥ 2.38 gerekir" ve "Linux paketi CI'da değil"
+> ifadelerinin üçü de **2026-08-15'te geçersiz kaldı**: paketler artık CI'da (ubuntu-22.04 /
+> glibc 2.35) derleniyor, AppImage geri döndü, deb Debian 12+ / Ubuntu 22.04+'ı kapsıyor.
+> v1.1.0'ın bozuk deb'i release'den kaldırıldı. Güncel notlar → `SURUM-NOTLARI-v1.1.1.md`
+
 # GalleryWeb v1.1.0 — Windows masaüstü uygulaması
 
 **v1.0.0'da eksik olan tek şey Windows paketiydi. Bu sürüm onu kapatıyor** — ve

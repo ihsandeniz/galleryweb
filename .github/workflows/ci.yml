@@ -214,6 +214,56 @@ jobs:
             desktop/src-tauri/target/release/bundle/deb/*.deb
             desktop/src-tauri/target/release/bundle/appimage/*.AppImage
 
+  gizlilik:
+    name: Gizlilik — dışarı istek gidiyor mu
+    runs-on: ubuntu-latest
+    # Bu projenin ürün vaadi tek cümle: "fotoğraflarınla ilgili hiçbir şey dışarı
+    # gitmez". O vaadi şimdiye kadar CI ölçmüyordu — yalnız elle koşulan bir betik
+    # vardı. Bir CDN linki (font/Leaflet/harita altlığı) geri sızarsa fark edilmesi
+    # gereken yer burasıdır: sızıntı kod hatası gibi görünmez, sessizce çalışır.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements-selfhost.txt
+
+      - name: Bağımlılıklar
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-selfhost.txt playwright
+          playwright install --with-deps chromium
+
+      - name: Fotoğraf klasörü hazırla
+        # Klasör seçilmemişse harita görünümü hiç açılmaz ve test "sıfır dış
+        # istek" diyerek BOŞA geçer. Ölçümün anlamlı olması için gerçek bir
+        # fotoğraf gerekiyor — üstelik GPS EXIF'li, çünkü sızıntının asıl
+        # olduğu yer harita altlığının koordinatları OSM'e bildirmesiydi.
+        run: python tests/gizlilik_fikstur.py "$RUNNER_TEMP/foto"
+
+      - name: Sunucuyu başlat
+        run: |
+          cd backend && PORT=5099 python main.py > "$RUNNER_TEMP/sunucu.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:5099/ >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:5099/ >/dev/null || { cat "$RUNNER_TEMP/sunucu.log"; exit 1; }
+          curl -sf -X POST http://127.0.0.1:5099/api/set-directory \
+            -H 'Content-Type: application/json' \
+            -d "{\"path\": \"$RUNNER_TEMP/foto\"}" >/dev/null
+
+      - name: Sızıntı testi
+        env:
+          GW_BASE: http://127.0.0.1:5099
+        run: python tests/gizlilik_sizinti_testi.py
+
+      - name: Sunucu günlüğü (hata hâlinde)
+        if: failure()
+        run: cat "$RUNNER_TEMP/sunucu.log" || true
+
   frontend-lint:
     name: Frontend Lint
     runs-on: ubuntu-latest

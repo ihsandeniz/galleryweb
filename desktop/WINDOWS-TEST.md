@@ -28,7 +28,7 @@ paketinin içeriğini doğruluyor. Ama CI'nın **yapamadığı** altı şey var 
 > **Ders kayda geçti** → `WIKI/ledger.md` §
 > `release/taslak-varlik-koddan-sonra-tazelenmez-bayat-paket-test-edilir`
 
-**En kolay yol —** https://github.com/ihsandeniz/galleryweb/releases → **`v1.1.0` (Draft)**
+**En kolay yol —** https://github.com/ihsandeniz/galleryweb/releases → **`v1.1.1` (Latest)**
 → `GalleryWeb_1.1.0_x64-setup.exe` (**232 MB**, 07-08-2026 17:04'te yüklendi).
 *Taslağı yalnız sen görürsün.*
 
@@ -122,7 +122,10 @@ makinesinde hiç açılmadı. *"Kaynak yeşil ≠ ürün çalışıyor"* (Yuki v
 
 ## Liste geçtikten sonra (bende — 3 adım, ~5 dk)
 
-1. `gh release edit v1.1.0 --draft=false` → sürüm yayına girer
-2. `ihsan-web-site` reposunda `galleryweb-v1.1.0` dalını main'e al + push
+1. ~~`gh release edit v1.1.0 --draft=false`~~ → **yapıldı 2026-08-08**; güncel sürüm **v1.1.1** (2026-08-15)
+2. ~~`ihsan-web-site` reposunda `galleryweb-v1.1.0` dalını main'e al + push~~ →
+   ⛔ **BU DALI MERGE ETME.** Dal main'in 29 commit GERİSİNDE; merge edilirse
+   `takip.html`/`takip.css` gibi canlı sayfaları geri siler. İçeriği zaten
+   2026-08-15'te doğrudan main'e uygulandı (indirme bandı v1.1.1). Dal ölü.
    (indirme linkleri o an canlıya çıkar — release'den ÖNCE push edilirse 404 verir)
 3. Sürüm notlarındaki yorum satırına gerçek makine doğrulaması eklenir
