@@ -276,7 +276,7 @@ async def lifespan(app: FastAPI):
 # ölçer. Buraya kadar sürüm hiçbir yerde yazmıyordu: çalışan uygulama kendini
 # OpenAPI'de `0.1.0` diye tanıtıyordu, yani "hangi sürümü çalıştırıyorum?"
 # sorusunun ürün içinde cevabı yoktu.
-SURUM = "1.1.1"
+SURUM = "1.1.2"
 
 app = FastAPI(title="Photo Gallery Pro", version=SURUM, lifespan=lifespan)
 
@@ -1777,17 +1777,57 @@ async def ag_ayarla(body: dict):
 # Map View (GPS/EXIF)
 # ──────────────────────────────────────────────
 
-def _dms_to_decimal(dms_list, ref: str) -> float | None:
-    """Convert EXIF DMS (list of fractions as 'num/den' strings) to decimal degrees."""
+def _dms_to_decimal(dms, ref: str) -> float | None:
+    """EXIF DMS değerini ondalık dereceye çevirir.
+
+    Üç ayrı biçim gelebiliyor ve **üçünü de kabul etmek zorunda**:
+      • pyexiv2      → tek string:  '38/1 25/1 201/25'
+      • ayrılmış     → liste:       ['38/1', '25/1', '201/25']
+      • Pillow       → sayı üçlüsü: (38.0, 25.0, 8.04)  (IFDRational)
+
+    🐞 2026-08-15'e kadar yalnız ORTADAKİ biçim destekleniyordu; çağıran taraf
+    ise pyexiv2'nin STRING'ini veriyordu. String üzerinde döngü karakterleri
+    gezdiği için `ValueError` fırlıyor, üstteki bare-except onu yutuyordu →
+    harita görünümü hiçbir zaman tek bir fotoğraf göstermedi, hata da vermedi.
+    """
     try:
-        def frac(s):
-            n, d = s.split('/')
-            return int(n) / int(d)
-        d, m, s = [frac(v) for v in dms_list]
+        if isinstance(dms, str):
+            dms = dms.split()
+        if len(dms) != 3:
+            return None
+
+        def sayi(v):
+            if isinstance(v, str):
+                n, d = v.split('/')
+                return int(n) / int(d)
+            return float(v)   # Pillow IFDRational / Fraction / float
+
+        d, m, s = (sayi(v) for v in dms)
         dec = d + m / 60 + s / 3600
-        return -dec if ref in ('S', 'W') else dec
+        return -dec if str(ref).strip().upper().startswith(('S', 'W')) else dec
     except Exception:
         return None
+
+
+def _gps_pillow(path) -> tuple[float | None, float | None]:
+    """GPS'i Pillow ile okur — pyexiv2 YOKKEN kullanılan yol.
+
+    pyexiv2 hiçbir requirements dosyasında değil (self-host kurulumunda kurulu
+    olmaz), dolayısıyla haritanın tek kaynağı ona bağlanınca özellik sessizce
+    ölüyordu. Pillow zaten zorunlu bağımlılık; GPS için yetiyor.
+    """
+    try:
+        from PIL import Image as _PILImage
+        with _PILImage.open(path) as im:
+            gps = im.getexif().get_ifd(0x8825)   # GPSInfo IFD
+        if not gps:
+            return None, None
+        lat = _dms_to_decimal(gps.get(2), gps.get(1) or 'N')   # GPSLatitude / Ref
+        lon = _dms_to_decimal(gps.get(4), gps.get(3) or 'E')   # GPSLongitude / Ref
+        return lat, lon
+    except Exception as e:
+        logger.debug("Pillow GPS okunamadı (%s): %s", path, e)
+        return None, None
 
 
 def _extract_gps(exif_dict: dict) -> tuple[float | None, float | None]:
@@ -1824,16 +1864,25 @@ async def get_map_images():
         if cached and cached.get('gps_latitude') is not None:
             lat, lon = cached['gps_latitude'], cached['gps_longitude']
         else:
+            # Önce pyexiv2 (kuruluysa daha zengin okur), yoksa/başarısızsa Pillow.
+            # İkisini de denemek şart: pyexiv2 self-host kurulumunda YOK, Pillow
+            # ise her zaman var. Tek kaynağa bağlanmak özelliği sessizce öldürüyordu.
             try:
                 import pyexiv2
                 img = pyexiv2.Image(str(p))
                 exif = img.read_exif()
                 img.close()
                 lat, lon = _extract_gps(exif)
-                if lat is not None:
-                    cache_manager.upsert_image_metadata(str(p), gps_latitude=lat, gps_longitude=lon)
-            except Exception:
+            except ImportError:
                 pass
+            except Exception as e:
+                logger.debug("pyexiv2 GPS okunamadı (%s): %s", p, e)
+
+            if lat is None or lon is None:
+                lat, lon = _gps_pillow(p)
+
+            if lat is not None and lon is not None:
+                cache_manager.upsert_image_metadata(str(p), gps_latitude=lat, gps_longitude=lon)
 
         if lat is not None and lon is not None:
             results.append({"path": rel, "lat": lat, "lng": lon})
