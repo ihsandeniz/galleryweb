@@ -64,23 +64,28 @@ no Python, no terminal, no browser tab:
 | Platform | File | Notes |
 |---|---|---|
 | **Windows 10 / 11** | `GalleryWeb_x.y.z_x64-setup.exe` | Includes the WebView2 runtime — installs without internet |
-| **Linux (Debian 13+ / Ubuntu 24.04+)** | `GalleryWeb_x.y.z_amd64.deb` | Requires **glibc ≥ 2.38** — see the note below |
+| **Linux (Debian 12+ / Ubuntu 22.04+)** | `GalleryWeb_x.y.z_amd64.deb` · `_amd64.AppImage` | Requires **glibc ≥ 2.35** — see the note below |
 
-> **The Linux version requirement is a real one.** The `.deb` runs on **Debian 13 (trixie)**
-> and **Ubuntu 24.04**; on **Debian 12 (bookworm) and Ubuntu 22.04 it will not start**
-> (`GLIBC_2.38 not found`). Installation still **succeeds without errors** on those systems —
-> `apt` does not block it, because the package declares no `libc6` lower bound — but the app
-> won't launch. Measured: failed in a `debian:12` container, started in `debian:13`.
-> **No AppImage is published as of v1.1.0** — the v1.0.0 AppImage bundled the build machine's
-> system libraries (Arch, glibc 2.44), so in practice it only opened on rolling distros and on
-> **no LTS at all**. It will return once the Linux packages are built in CI on an older base.
-> If you're on an older distro, use **Option B** below (runs from source, no glibc constraint).
+> **Linux packages are built in CI, not on a developer's machine** — and that is the whole
+> point. A Linux package inherits the glibc of the machine that built it. Up to and including
+> **v1.1.0 they were built on Arch (glibc 2.44)**, which made them undistributable: the
+> published `.deb` needs `GLIBC_2.39` (won't start on Debian 12 / Ubuntu 22.04, and `apt`
+> installs it anyway because the package declared no `libc6` lower bound), and the v1.0.0
+> AppImage bundled Arch's system libraries and opened on **no LTS at all**.
+> **As of v1.1.1**, both are built by [GitHub Actions](https://github.com/ihsandeniz/galleryweb/actions)
+> on Ubuntu 22.04 (glibc 2.35), the `.deb` declares `libc6 (>= 2.35)` so `apt` refuses rather
+> than installing something broken, and every build is installed and started inside a
+> `debian:12` container before it may be published. If you're on something older, use
+> **Option B** below (runs from source, no glibc constraint).
 
-> 🇹🇷 **Linux paketi için sürüm kısıtı gerçektir.** `deb`, **Debian 13** ve **Ubuntu 24.04**
-> üzerinde çalışır; **Debian 12 ve Ubuntu 22.04'te açılmaz** (`GLIBC_2.38 not found`) — kurulum
-> hatasız tamamlanır ama uygulama başlamaz. **v1.1.0 itibarıyla AppImage yayınlanmıyor**
-> (derleyen makinenin kütüphanelerini paketlediği için hiçbir LTS'te açılmıyordu). Eski bir
-> dağıtımdaysanız aşağıdaki **Option B**'yi kullanın — kaynaktan çalışır, bu kısıt yoktur.
+> 🇹🇷 **Linux paketleri artık CI'da derleniyor.** Bir Linux paketi, derlendiği makinenin
+> glibc'sini taban alır. **v1.1.0 dahil paketler Arch'ta (glibc 2.44) derlendiği için**
+> dağıtılamazdı: yayındaki `.deb` `GLIBC_2.39` istiyor (Debian 12 / Ubuntu 22.04'te açılmaz,
+> üstelik `libc6` alt sınırı beyan edilmediği için apt sessizce kuruyordu), v1.0.0 AppImage'ı
+> ise hiçbir LTS'te açılmıyordu. **v1.1.1'den itibaren** ikisi de GitHub Actions'ta
+> Ubuntu 22.04 (glibc 2.35) üzerinde üretiliyor, `.deb` artık `libc6 (>= 2.35)` beyan ediyor
+> ve her paket yayınlanmadan önce `debian:12` kabında kurulup çalıştırılarak sınanıyor.
+> Daha eski bir dağıtımdaysanız aşağıdaki **Option B** kaynaktan çalışır, bu kısıt yoktur.
 
 > **Windows: “Windows protected your PC”** — the installer is **unsigned** (a code-signing
 > certificate costs $200–400/year and this is a free, open-source project). Click

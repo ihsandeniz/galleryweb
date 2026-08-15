@@ -271,7 +271,14 @@ async def lifespan(app: FastAPI):
     thumbnail_gen.executor.shutdown(wait=False)
 
 
-app = FastAPI(title="Photo Gallery Pro", lifespan=lifespan)
+# Uygulamanın kendi sürümü. Masaüstü paketiyle (tauri.conf.json + Cargo.toml)
+# aynı olmak ZORUNDA — `tests/test_surum_tutarliligi.py` bunu her CI koşusunda
+# ölçer. Buraya kadar sürüm hiçbir yerde yazmıyordu: çalışan uygulama kendini
+# OpenAPI'de `0.1.0` diye tanıtıyordu, yani "hangi sürümü çalıştırıyorum?"
+# sorusunun ürün içinde cevabı yoktu.
+SURUM = "1.1.1"
+
+app = FastAPI(title="Photo Gallery Pro", version=SURUM, lifespan=lifespan)
 
 # Rate limiting setup
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
