@@ -146,10 +146,20 @@ listeledi · önbellek doğru dizine yazıldı · `kill -9` sonrası zombi kalma
 
 ## Paket boyutları
 
+Aşağıdaki sayılar **CI'ın ürettiği, yayınlanan** v1.1.1 paketlerinindir:
+
 | Paket | Boyut | Not |
 |---|---|---|
-| `.deb` | 54 MB | Sistem GTK/WebKit'ini kullanır — **glibc ≥ 2.35** ister, bunu artık `Depends:`te de beyan eder |
-| `.AppImage` | 199 MB | GTK/WebKit'i içine alır ama **glibc'yi almaz** — aşağıya bakın |
+| `.deb` | 68 MB | Sistem GTK/WebKit'ini kullanır — **glibc ≥ 2.35** ister, bunu artık `Depends:`te de beyan eder |
+| `.AppImage` | 214 MB | GTK/WebKit'i içine alır ama **glibc'yi almaz** — aşağıya bakın |
+| `x64-setup.exe` | 247 MB | WebView2 çevrimdışı kurucu dahil |
+
+> ⚠️ **Kendi makinende derlersen paket daha KÜÇÜK çıkar** — ve bu bir hata değil.
+> Aynı commit minimal bir `ubuntu:22.04` kabında deb'i 54 MB, AppImage'ı 199 MB
+> verdi; CI runner'ında 68 MB / 214 MB. Sebep: paketleyiciler (PyInstaller ve
+> linuxdeploy) **derleme makinesinde ne bulurlarsa** onu toplar, GitHub runner
+> imajı ise kütüphane bakımından çok daha zengindir. Boyutu kıyaslarken hangi
+> makinede derlendiğine bak; yayınlanan sayı **daima CI'ınkidir**.
 
 > ⚠️ **AppImage "hiçbir bağımlılık istemez" DEĞİL.** Gömdüğü kütüphaneler derleyen sistemin
 > glibc'sine bağlıdır ve AppRun onları yükleme yolunun BAŞINA koyar, yani kesin yüklenirler.
