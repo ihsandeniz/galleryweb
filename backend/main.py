@@ -22,6 +22,7 @@ from typing import List, Dict
 import asyncio
 import itertools
 import json
+from functools import partial
 from cache_manager import CacheManager
 from thumbnail_gen import ThumbnailGenerator
 
@@ -276,7 +277,7 @@ async def lifespan(app: FastAPI):
 # ölçer. Buraya kadar sürüm hiçbir yerde yazmıyordu: çalışan uygulama kendini
 # OpenAPI'de `0.1.0` diye tanıtıyordu, yani "hangi sürümü çalıştırıyorum?"
 # sorusunun ürün içinde cevabı yoktu.
-SURUM = "1.1.2"
+SURUM = "1.1.3"
 
 app = FastAPI(title="Photo Gallery Pro", version=SURUM, lifespan=lifespan)
 
@@ -356,11 +357,6 @@ async def no_cache_static(request: Request, call_next):
 @app.get("/")
 async def root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
-
-
-@app.get("/share")
-async def share_page():
-    return FileResponse(str(FRONTEND_DIR / "share.html"))
 
 
 @app.get("/favicon.ico")
@@ -1199,9 +1195,14 @@ async def find_duplicate_images(threshold: int = 8, include_subfolders: bool = F
     if not image_paths:
         return {"groups": [], "count": 0}
 
+    # ⚠️ `lambda` KULLANMA: POSIX'te bu havuz bir ProcessPoolExecutor'dır
+    # (thumbnail_gen.py — Windows'ta ThreadPool, POSIX'te ProcessPool) ve gönderilen
+    # çağrılabilir pickle edilir. Yerel lambda pickle edilemez → uç Linux/macOS'ta
+    # HER ZAMAN 500 döner, Windows'ta çalışır. `partial` modül seviyesindeki
+    # fonksiyonu referanslar ve iki havuzda da geçerlidir.
     groups = await asyncio.get_running_loop().run_in_executor(
         thumbnail_gen.executor,
-        lambda: find_duplicates(image_paths, threshold=max(0, min(20, threshold)))
+        partial(find_duplicates, image_paths, threshold=max(0, min(20, threshold)))
     )
 
     result = []
@@ -1451,8 +1452,17 @@ async def batch_move(body: dict):
                     target = dest / f"{stem}_moved{counter}{suffix}"
                     counter += 1
             _shutil.move(str(src), str(target))
-            cache_manager.move_metadata(str(src), str(target))
-            results.append({"path": p, "ok": True, "dest": str(target.name)})
+            # Dosya bu noktada TAŞINDI. Metadata aktarımı ayrı bir işlemdir ve
+            # başarısız olursa taşımayı "başarısız" göstermemeli — kullanıcı hata
+            # görüp klasöre bakınca dosyayı bulamaz ve iki kez taşımaya çalışır.
+            # Yine de sessiz kalmaz: hata loglanır ve yanıtta `metadata_error` olur.
+            sonuc = {"path": p, "ok": True, "dest": str(target.name)}
+            try:
+                cache_manager.move_metadata(str(src), str(target))
+            except Exception as me:
+                logger.error("move_metadata failed %s → %s: %s", src, target, me)
+                sonuc["metadata_error"] = str(me)
+            results.append(sonuc)
         except Exception as e:
             results.append({"path": p, "ok": False, "error": str(e)})
 

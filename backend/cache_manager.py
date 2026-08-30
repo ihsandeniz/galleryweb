@@ -534,7 +534,7 @@ class CacheManager:
         try:
             for table, col in [
                 ('favorites', 'path'),
-                ('notes', 'path'),
+                ('notes', 'image_path'),   # tablo kolonu `image_path` — `path` DEĞİL
                 ('ratings', 'image_path'),
                 ('image_tags', 'image_path'),
             ]:
