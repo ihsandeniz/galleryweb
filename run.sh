@@ -14,30 +14,31 @@ if command -v git >/dev/null 2>&1 && [ -d ".git" ]; then
     git pull --ff-only 2>/dev/null || true
 fi
 
-# Python bul — bağımlılıkların hazır wheel'i olan sürümleri (3.10–3.13) tercih et.
-# Çok yeni sürümler (ör. 3.14) bazı paketleri kaynaktan derlemeye zorlar ve kurulum
-# derleyici hatasıyla çöker; o yüzden önce uyumlu bir yorumlayıcı ararız.
+# Python bul — bağımlılıkların hazır wheel'i olan sürümleri (3.10–3.14) tercih et.
+# 3.14 NOTU: eski `==` pinleri döneminde 3.14 kurulumu kaynaktan derlemeye zorluyordu;
+# bağımlılıklar 2026-07-25'te "güvenlik tabanı + majör tavan" (`>=`) politikasına geçirildi.
+# 2026-08-30'da ölçüldü: Python 3.14.7 ile requirements-selfhost.txt sorunsuz kuruluyor.
 PY=""
-for cand in python3.13 python3.12 python3.11 python3.10; do
+for cand in python3.14 python3.13 python3.12 python3.11 python3.10; do
     if command -v "$cand" >/dev/null 2>&1; then PY="$cand"; break; fi
 done
 if [ -z "$PY" ]; then
-    # Uyumlu sürüm yok — python3/python'a düş (3.10–3.13 ise kullan, değilse uyar)
+    # Sürüme özel ad yok — python3/python'a düş (3.10–3.14 ise kullan, değilse uyar)
     for cand in python3 python; do
         if command -v "$cand" >/dev/null 2>&1; then
             minor=$("$cand" -c 'import sys; print(sys.version_info[1])' 2>/dev/null)
             major=$("$cand" -c 'import sys; print(sys.version_info[0])' 2>/dev/null)
             PY="$cand"
-            if [ "$major" = "3" ] && { [ "$minor" -lt 10 ] || [ "$minor" -gt 13 ]; }; then
-                echo "⚠️  Bulunan Python ($("$cand" --version 2>&1)) çok yeni/eski olabilir —"
-                echo "    bazı paketler için hazır wheel bulunmayabilir. Önerilen: Python 3.11–3.13."
+            if [ "$major" = "3" ] && { [ "$minor" -lt 10 ] || [ "$minor" -gt 14 ]; }; then
+                echo "⚠️  Bulunan Python ($("$cand" --version 2>&1)) sınanan aralığın dışında —"
+                echo "    bazı paketler için hazır wheel bulunmayabilir. Sınanan: Python 3.10–3.14."
             fi
             break
         fi
     done
 fi
 if [ -z "$PY" ]; then
-    echo "❌ Python bulunamadı. Lütfen Python 3.11–3.13 kurun: https://www.python.org/downloads/"
+    echo "❌ Python bulunamadı. Lütfen Python 3.11–3.14 kurun: https://www.python.org/downloads/"
     read -r -p "Kapatmak için Enter'a basın..." _
     exit 1
 fi
