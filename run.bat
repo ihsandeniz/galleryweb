@@ -6,15 +6,16 @@ REM Guncelleme geldiginde bagimliliklar OTOMATIK tazelenir (elle silme gerekmez)
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-REM ── Python bul — hazir wheel'i olan surumleri (3.11-3.13) tercih et ───────────
-REM Cok yeni surumler (3.14) bazi paketleri kaynaktan derlemeye zorlar ve cokebilir.
+REM ── Python bul — hazir wheel'i olan surumleri (3.11-3.14) tercih et ───────────
+REM 3.14 NOTU: eski "==" pin doneminde 3.14 kurulumu kaynaktan derlemeye zorluyordu;
+REM bagimliliklar ">=" politikasina gecti. 2026-08-30'da olculdu: 3.14.7 sorunsuz kuruluyor.
 REM ONEMLI: Sadece PATH'te "var mi" bakmak yetmez — Windows'un Microsoft Store
 REM "python.exe" kisayolu where'de gorunur ama GERCEK Python DEGILDIR. Her adayi
 REM "-c import sys" ile CALISTIRARAK dogrula; stub bu testte hata dondurur.
 set "PY="
 where py >nul 2>&1
 if not errorlevel 1 (
-    for %%V in (3.13 3.12 3.11) do (
+    for %%V in (3.14 3.13 3.12 3.11) do (
         if not defined PY (
             py -%%V -c "import sys" >nul 2>&1 && set "PY=py -%%V"
         )
@@ -29,7 +30,7 @@ if not defined PY (
 if not defined PY (
     echo [HATA] Calisan bir Python bulunamadi.
     echo.
-    echo Python 3.11 - 3.13 kurmaniz gerekiyor:
+    echo Python 3.11 - 3.14 kurmaniz gerekiyor:
     echo   https://www.python.org/downloads/
     echo   ^(kurulum ekraninda "Add Python to PATH" kutusunu ISARETLEYIN^)
     echo.

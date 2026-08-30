@@ -1,6 +1,6 @@
 [package]
 name = "galleryweb-desktop"
-version = "1.1.2"
+version = "1.1.3"
 description = "GalleryWeb — yerel fotoğraf galerisi masaüstü uygulaması"
 authors = ["ihsandeniz"]
 edition = "2021"
