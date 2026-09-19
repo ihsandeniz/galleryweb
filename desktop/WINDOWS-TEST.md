@@ -19,13 +19,22 @@ paketinin içeriğini doğruluyor. Ama CI'nın **yapamadığı** altı şey var 
 
 ## Paketi indir
 
-**https://github.com/ihsandeniz/galleryweb/releases → `v1.1.2` (Latest)**
-→ **`GalleryWeb_1.1.2_x64-setup.exe`** (**247 MB**)
+**https://github.com/ihsandeniz/galleryweb/releases → `v1.1.3` (Latest)**
+→ **`GalleryWeb_1.1.3_x64-setup.exe`**
 
 Sürüm **herkese açık** — VM'in içinden tarayıcıyla doğrudan indirebilirsin.
 
-> 🔎 **İndirmeden önce 5 saniyelik kontrol:** dosya adında **1.1.2** yazmalı ve boyut
-> **247 MB** olmalı. Başka bir sayı görüyorsan eski sürüme bakıyorsundur — indirme, haber ver.
+> 🔎 **İndirmeden önce 5 saniyelik kontrol:** dosya adında **1.1.3** yazmalı.
+> Boyut **aynı dosya için iki farklı sayı gösterir** — ikisi de doğrudur:
+> **GitHub sayfasında ~293 MB** · **indirdikten sonra Windows Explorer'da ~279 MB**
+> (GitHub 1000-tabanlı MB, Windows 1024-tabanlı MB kullanır; gerçek boyut
+> `293.384.336 bayt`). Bu ikisinden biri değilse eski sürüme bakıyorsundur —
+> indirme, haber ver.
+>
+> 📏 Sayılar **2026-09-19'da canlı release'den ölçüldü**
+> (`gh release view --repo ihsandeniz/galleryweb --json assets`). Yeni sürüm
+> yayınlayan tur burayı da güncellesin — 08-15'ten 09-19'a kadar `1.1.2 / 247 MB`
+> yazılı kaldı ve yukarıdaki kapı **doğru paketi reddedecek** durumdaydı.
 
 > ⚠️ **VM'in İÇİNDEN, tarayıcıyla indir.** Paylaşılan klasörle kopyalarsan dosyaya
 > *Mark of the Web* basılmaz, SmartScreen hiç çıkmaz ve aşağıdaki 1. madde **sahte geçer**.

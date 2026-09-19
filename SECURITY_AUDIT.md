@@ -187,12 +187,17 @@ export TOKEN_SECRET="your-secret-key-here"
 
 ## Testing Checklist
 
-- [ ] Login endpoint returns valid access + refresh tokens
-- [ ] Refresh endpoint validates signature correctly
-- [ ] Refresh endpoint rejects expired tokens (> 7 days old)
-- [ ] Refresh endpoint issues new token pair on valid refresh
-- [ ] Modified signature on token causes refresh to fail
-- [ ] Timing attack resistant (uses `hmac.compare_digest`)
+> ⛔ **N/A — bu testlerin konusu olan kod YOK (bkz. yukarıdaki PARTLY HISTORICAL uyarısı).**
+> Auth katmanı 2026-08-07'de kaldırıldı (`3814181`, `024f94d`). Ölçüm 2026-09-19:
+> `grep -rlE "auth/login|refresh_token" backend/` → **0 dosya**. Altı madde tarihsel kayıt
+> olarak duruyor; **açık görev değil**, koşulacak bir test de değil.
+
+- [x] ~~Login endpoint returns valid access + refresh tokens~~ (N/A — auth katmanı 2026-08-07'de kaldırıldı)
+- [x] ~~Refresh endpoint validates signature correctly~~ (N/A — auth katmanı 2026-08-07'de kaldırıldı)
+- [x] ~~Refresh endpoint rejects expired tokens (> 7 days old)~~ (N/A — auth katmanı 2026-08-07'de kaldırıldı)
+- [x] ~~Refresh endpoint issues new token pair on valid refresh~~ (N/A — auth katmanı 2026-08-07'de kaldırıldı)
+- [x] ~~Modified signature on token causes refresh to fail~~ (N/A — auth katmanı 2026-08-07'de kaldırıldı)
+- [x] ~~Timing attack resistant (uses `hmac.compare_digest`)~~ (N/A — auth katmanı 2026-08-07'de kaldırıldı)
 
 ---
 
